@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify dist output
+        run: |
+          test -f dist/immersive-weather-dashboard.js
+          echo "dist/immersive-weather-dashboard.js present"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: immersive-weather-dashboard-dist
+          path: dist/immersive-weather-dashboard.js
