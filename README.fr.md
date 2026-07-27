@@ -89,7 +89,7 @@ HACS installe le fichier unique `dist/immersive-weather-dashboard.js` et enregis
 
 1. Préparez votre photo de maison avec un ciel transparent (PNG ou WebP, véritable canal alpha — voir le [prompt IA](#prompt-ia-pour-préparer-votre-photo-de-maison)).
 2. Téléversez le fichier dans `config/www/` (par exemple `config/www/maison.png`), afin qu'il soit accessible via `/local/maison.png`, ou hébergez-le sur une URL HTTPS que vous contrôlez.
-3. Ajoutez la carte à un tableau de bord, ouvrez l'éditeur de carte, et dans l'onglet **Image et scène**, collez le chemin de l'image (`/local/maison.png`) dans **URL de l'image de la maison**.
+3. Ajoutez la carte à un tableau de bord, ouvrez l'éditeur de carte, et dans l'onglet **Image et scène**, collez le chemin de l'image (`/local/maison.png`) dans **URL de l'image de la maison**. Si la maison paraît zoomée, choisissez **Afficher l'image entière**, puis ajustez le zoom et les positions horizontale/verticale. Pour une photo 4:3, un ratio de scène 4/3 donnera le cadrage le plus fidèle.
 4. Choisissez votre **entité météo** dans l'onglet **Source de données**, ou laissez le champ vide pour laisser la carte détecter automatiquement la meilleure entité.
 5. Ajustez l'**Apparence** (opacité/flou/rayon des panneaux, couleurs d'accent/texte, hauteur minimale de la scène, ratio d'aspect de la scène, densité) pour correspondre à votre thème et à votre écran — ces réglages ne dimensionnent désormais que le **viewport de la scène**, pas toute la carte (voir [Mise en page](#mise-en-page--scène-et-zone-dinformations)).
 6. Activez/désactivez les **Prévisions** et choisissez le nombre d'éléments horaires/journaliers à afficher.
@@ -113,7 +113,7 @@ Ceci remplace directement le comportement de la v1.0, où chaque panneau était 
 La carte compose trois couches, de l'arrière vers l'avant :
 
 1. **Canevas d'arrière-plan** — dégradé de ciel, soleil/lune, étoiles et nuages. Il se trouve **derrière** votre photo de maison, et ne devient donc visible qu'à travers la zone de ciel transparente de votre PNG/WebP.
-2. **Votre photo de maison** — le premier plan opaque (maison, sol, végétation…) peint par-dessus le canevas d'arrière-plan. Partout où la photo est opaque, l'animation du ciel est naturellement masquée ; partout où elle est transparente (le ciel détouré), l'arrière-plan animé apparaît.
+2. **Votre photo de maison** — le premier plan opaque (maison, sol, végétation…) peint par-dessus le canevas d'arrière-plan. Partout où la photo est opaque, l'animation du ciel est naturellement masquée ; partout où elle est transparente (le ciel détouré), l'arrière-plan animé apparaît. L'éditeur visuel peut remplir la scène (avec recadrage si les ratios diffèrent) ou conserver l'image entière, avec un zoom indépendant de 50 à 200 % et un positionnement horizontal/vertical.
 3. **Canevas de premier plan** — pluie, neige, grêle, volutes de brouillard et éclairs, dessinés **au-dessus** de votre photo de maison. C'est intentionnel : la pluie et la brume qui tombent passent aussi réellement devant une maison, pas seulement derrière.
 
 La composition reposant entièrement sur le canal alpha de votre image, la qualité du détourage détermine directement le réalisme de la scène. Un masque alpha propre et précis (sans liseré, sans pixel de ciel restant, sans antenne trop effacée) est l'ingrédient le plus important pour un bon résultat.
@@ -126,7 +126,7 @@ Tout ce qui suit est configurable depuis l'éditeur graphique. Aucune édition Y
 | --- | --- |
 | Source de données | Titre de la carte, entité météo (ou détection automatique) |
 | Association des entités | Pour chaque indicateur de la station extérieure : type de source résolu, identifiant exact de l'entité résolue (ou attribut météo), remplacement manuel recherchable, et un contrôle pour effacer le remplacement |
-| Image et scène | URL de l'image de la maison, mode jour/nuit (auto/jour/nuit), animation activée/désactivée, qualité d'animation (faible/moyenne/élevée), intensité d'animation (0–2) |
+| Image et scène | URL de l'image de la maison, remplissage/image entière, zoom (50–200 %), positions horizontale/verticale, réinitialisation du cadrage, mode jour/nuit, qualité et intensité d'animation |
 | Apparence | Opacité des panneaux, flou des panneaux, rayon des coins des panneaux, couleur d'accent, couleur du texte, hauteur minimale de la scène, ratio d'aspect de la scène, densité (confortable/compacte) |
 | Prévisions | Afficher/masquer les prévisions horaires, afficher/masquer les prévisions journalières, nombre d'éléments horaires, nombre d'éléments journaliers |
 | Indicateurs météo | Par indicateur : visible, libellé personnalisé, couleur personnalisée, icône personnalisée, et un indicateur de « source » en lecture seule (manuelle / attribut météo / capteur / non disponible) — les remplacements manuels vivent désormais dans l'onglet **Association des entités** |

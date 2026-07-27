@@ -48,6 +48,7 @@ export interface HomeAssistant {
 
 export type AnimationQuality = 'low' | 'medium' | 'high';
 export type SceneMode = 'auto' | 'day' | 'night';
+export type ImageFit = 'cover' | 'contain';
 export type Density = 'comfortable' | 'compact';
 
 export const METRIC_KEYS = [
@@ -92,6 +93,10 @@ export interface AnimationConfig {
 
 export interface SceneConfig {
   mode: SceneMode;
+  image_fit: ImageFit;
+  image_scale: number;
+  image_position_x: number;
+  image_position_y: number;
 }
 
 export interface AppearanceConfig {

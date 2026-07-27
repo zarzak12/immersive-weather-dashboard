@@ -21,7 +21,7 @@ import type {
   SceneConfig
 } from '../types';
 import { ALERT_LOGICS, ALERT_OPERATORS, ALERT_SEVERITIES, ENVIRONMENT_ZONE_ENTITY_KEYS, METRIC_KEYS } from '../types';
-import { defaultConfig, mergeConfig } from '../config/defaults';
+import { DEFAULT_SCENE, defaultConfig, mergeConfig } from '../config/defaults';
 import { METRIC_CATALOG } from '../config/metrics';
 import { autoDetectSnapshot, pickWeatherEntity, resolveMetric, type ResolvedMetric } from '../data/entity-discovery';
 import { localize } from '../localize/localize';
@@ -265,6 +265,59 @@ export class ImmersiveWeatherDashboardEditor extends LitElement {
         @input=${(event: InputEvent) => this._updateRoot('image_url', (event.target as HTMLInputElement).value || undefined)}
       />
       <p class="helper">${this._t('editor.image_url_helper')}</p>
+
+      <label>${this._t('editor.image_fit')}</label>
+      <select
+        @change=${(event: Event) =>
+          this._updateScene({ image_fit: (event.target as HTMLSelectElement).value as SceneConfig['image_fit'] })}
+      >
+        <option value="cover" ?selected=${this._config.scene.image_fit === 'cover'}>${this._t('editor.image_fit_cover')}</option>
+        <option value="contain" ?selected=${this._config.scene.image_fit === 'contain'}>${this._t('editor.image_fit_contain')}</option>
+      </select>
+      <p class="helper">${this._t('editor.image_fit_helper')}</p>
+
+      <label>${this._t('editor.image_scale')}: ${Math.round(this._config.scene.image_scale * 100)} %</label>
+      <input
+        type="range"
+        min="0.5"
+        max="2"
+        step="0.05"
+        .value=${String(this._config.scene.image_scale)}
+        @input=${(event: Event) => this._updateScene({ image_scale: Number((event.target as HTMLInputElement).value) })}
+      />
+
+      <label>${this._t('editor.image_position_x')}: ${Math.round(this._config.scene.image_position_x)} %</label>
+      <input
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        .value=${String(this._config.scene.image_position_x)}
+        @input=${(event: Event) => this._updateScene({ image_position_x: Number((event.target as HTMLInputElement).value) })}
+      />
+
+      <label>${this._t('editor.image_position_y')}: ${Math.round(this._config.scene.image_position_y)} %</label>
+      <input
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        .value=${String(this._config.scene.image_position_y)}
+        @input=${(event: Event) => this._updateScene({ image_position_y: Number((event.target as HTMLInputElement).value) })}
+      />
+
+      <button
+        class="secondary"
+        @click=${() =>
+          this._updateScene({
+            image_fit: DEFAULT_SCENE.image_fit,
+            image_scale: DEFAULT_SCENE.image_scale,
+            image_position_x: DEFAULT_SCENE.image_position_x,
+            image_position_y: DEFAULT_SCENE.image_position_y
+          })}
+      >
+        ${this._t('editor.image_framing_reset')}
+      </button>
 
       <label>${this._t('editor.scene_mode')}</label>
       <select @change=${(event: Event) => this._updateScene({ mode: (event.target as HTMLSelectElement).value as SceneConfig['mode'] })}>

@@ -89,7 +89,7 @@ HACS installs the single bundled file `dist/immersive-weather-dashboard.js` and 
 
 1. Prepare your house photo with a transparent sky (PNG or WebP, real alpha channel — see the [AI prompt](#ai-prompt-to-prepare-your-house-photo)).
 2. Upload the file to `config/www/` (for example `config/www/house.png`), so it is reachable at `/local/house.png`, or host it on any HTTPS URL you control.
-3. Add the card to a dashboard, open the card editor, and in the **Image & scene** tab paste the image path (`/local/house.png`) into **House image URL**.
+3. Add the card to a dashboard, open the card editor, and in the **Image & scene** tab paste the image path (`/local/house.png`) into **House image URL**. If the house looks zoomed, select **Show the entire image**, then adjust zoom and horizontal/vertical position. For a 4:3 photo, a 4/3 scene aspect ratio gives the closest framing.
 4. Pick your **Weather entity** in the **Data source** tab, or leave it empty to let the card auto-detect the best one.
 5. Adjust **Appearance** (panel opacity/blur/corner radius, accent/text colors, scene minimum height, scene aspect ratio, density) to match your theme and screen — these now size the top **scene viewport only**, not the whole card (see [Layout](#layout-scene-viewport-and-information-area)).
 6. Enable/disable **Forecasts** and choose how many hourly/daily items to display.
@@ -113,7 +113,7 @@ This directly replaces the v1.0 behavior, where every panel was absolutely posit
 The card composites three layers, back to front:
 
 1. **Background canvas** — sky gradient, sun/moon, stars and clouds. This sits **behind** your house photo, so it becomes visible only through the transparent sky area of your PNG/WebP.
-2. **Your house photo** — the opaque foreground (house, ground, vegetation…) painted over the background canvas. Anywhere the photo is opaque, the sky animation is naturally hidden; anywhere it is transparent (the cut-out sky), the animated background shows through.
+2. **Your house photo** — the opaque foreground (house, ground, vegetation…) painted over the background canvas. Anywhere the photo is opaque, the sky animation is naturally hidden; anywhere it is transparent (the cut-out sky), the animated background shows through. The visual editor can fill the scene (cropping if ratios differ) or preserve the whole image, with independent 50–200% zoom and horizontal/vertical positioning.
 3. **Foreground canvas** — rain, snow, hail, fog wisps and lightning flashes, drawn **above** your house photo. This is intentional: falling precipitation and mist realistically pass in front of a house too, not just behind it.
 
 Because the compositing relies entirely on your image's own alpha channel, the quality of the cut-out directly determines how convincing the scene looks. A clean, precise alpha mask (no fringing, no leftover sky pixels, no over-erased antennas) is the single most important ingredient of a good result.
@@ -126,7 +126,7 @@ Everything below is configurable from the graphical editor. No YAML editing is r
 | --- | --- |
 | Data source | Card title, weather entity (or auto-detect) |
 | Entity mapping / Association des entités | For every outdoor station metric: resolved source type, the exact resolved entity ID (or weather attribute), a searchable manual entity override, and a clear-override control |
-| Image & scene | House image URL, day/night mode (auto/day/night), animation on/off, animation quality (low/medium/high), animation intensity (0–2) |
+| Image & scene | House image URL, fill/whole-image fitting, zoom (50–200%), horizontal/vertical position, framing reset, day/night mode, animation quality and intensity |
 | Appearance | Panel opacity, panel blur, panel corner radius, accent color, text color, scene minimum height, scene aspect ratio, density (comfortable/compact) |
 | Forecasts | Show/hide hourly forecast, show/hide daily forecast, number of hourly items, number of daily items |
 | Station metrics | Per metric: visible, custom label, custom color, custom icon, and a read-only "source" indicator (manual / weather attribute / sensor / not available) — manual entity overrides now live in the **Entity mapping** tab |

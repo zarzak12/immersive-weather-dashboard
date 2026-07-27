@@ -8,6 +8,12 @@ describe('mergeConfig', () => {
     expect(config.metrics).toHaveLength(17);
     expect(config.metrics.find((metric) => metric.key === 'outdoor_temperature')?.visible).toBe(false);
     expect(config.animation.quality).toBe('medium');
+    expect(config.scene).toMatchObject({
+      image_fit: 'cover',
+      image_scale: 1,
+      image_position_x: 50,
+      image_position_y: 100
+    });
   });
 
   it('preserves unrelated defaults when only a partial field is provided', () => {
@@ -22,6 +28,19 @@ describe('mergeConfig', () => {
     expect(config.animation.intensity).toBe(1.5);
     expect(config.animation.quality).toBe('medium');
     expect(config.animation.enabled).toBe(true);
+  });
+
+  it('merges and bounds image framing settings', () => {
+    const config = mergeConfig({
+      scene: { image_fit: 'contain', image_scale: 4, image_position_x: -10, image_position_y: 35 }
+    });
+    expect(config.scene).toMatchObject({
+      mode: 'auto',
+      image_fit: 'contain',
+      image_scale: 2,
+      image_position_x: 0,
+      image_position_y: 35
+    });
   });
 
   it('keeps unknown/legacy metric entries safe and merges known metric overrides', () => {

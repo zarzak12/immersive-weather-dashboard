@@ -369,12 +369,18 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       minHeight: `${appearance.min_height}px`,
       aspectRatio: appearance.aspect_ratio || undefined
     });
+    const imageStyle = styleMap({
+      objectFit: this._config.scene.image_fit,
+      objectPosition: `${this._config.scene.image_position_x}% ${this._config.scene.image_position_y}%`,
+      transform: `scale(${this._config.scene.image_scale})`,
+      transformOrigin: `${this._config.scene.image_position_x}% ${this._config.scene.image_position_y}%`
+    });
 
     return html`
       <ha-card style=${rootStyle} class="density-${appearance.density}">
         <div class="scene" style=${sceneStyle}>
           <canvas class="bg-canvas"></canvas>
-          ${this._config.image_url ? html`<img class="house-image" src=${this._config.image_url} alt="" />` : nothing}
+          ${this._config.image_url ? html`<img class="house-image" style=${imageStyle} src=${this._config.image_url} alt="" />` : nothing}
           <canvas class="fg-canvas"></canvas>
           <div class="scene-overlay">
             ${this._config.title ? html`<h1 class="title">${this._config.title}</h1>` : nothing}
@@ -572,6 +578,7 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       height: 100%;
       object-fit: cover;
       object-position: bottom center;
+      transform-origin: bottom center;
       z-index: 1;
       pointer-events: none;
     }
@@ -663,10 +670,16 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     .metric ha-icon {
       --mdc-icon-size: 20px;
       color: var(--accent-color, #7ec8ff);
+      flex-shrink: 0;
+    }
+    .metric-label {
+      min-width: 0;
     }
     .metric-value {
       margin-left: auto;
       font-weight: 600;
+      flex-shrink: 0;
+      white-space: nowrap;
     }
     .forecast-title {
       font-size: 0.85rem;
@@ -758,10 +771,16 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     .zone-row ha-icon {
       --mdc-icon-size: 18px;
       color: var(--accent-color, #7ec8ff);
+      flex-shrink: 0;
+    }
+    .zone-label {
+      min-width: 0;
     }
     .zone-value {
       margin-left: auto;
       font-weight: 600;
+      flex-shrink: 0;
+      white-space: nowrap;
     }
     .zone-warning ha-icon {
       --mdc-icon-size: 16px;

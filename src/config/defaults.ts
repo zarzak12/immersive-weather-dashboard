@@ -26,7 +26,11 @@ export const DEFAULT_ANIMATION: AnimationConfig = {
 };
 
 export const DEFAULT_SCENE: SceneConfig = {
-  mode: 'auto'
+  mode: 'auto',
+  image_fit: 'cover',
+  image_scale: 1,
+  image_position_x: 50,
+  image_position_y: 100
 };
 
 export const DEFAULT_APPEARANCE: AppearanceConfig = {
@@ -149,6 +153,20 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function boundedNumber(value: unknown, minimum: number, maximum: number, fallback: number): number {
+  return isFiniteNumber(value) ? Math.min(maximum, Math.max(minimum, value)) : fallback;
+}
+
+function mergeScene(input: Partial<SceneConfig> | undefined): SceneConfig {
+  return {
+    mode: input?.mode === 'day' || input?.mode === 'night' ? input.mode : 'auto',
+    image_fit: input?.image_fit === 'contain' ? 'contain' : 'cover',
+    image_scale: boundedNumber(input?.image_scale, 0.5, 2, DEFAULT_SCENE.image_scale),
+    image_position_x: boundedNumber(input?.image_position_x, 0, 100, DEFAULT_SCENE.image_position_x),
+    image_position_y: boundedNumber(input?.image_position_y, 0, 100, DEFAULT_SCENE.image_position_y)
+  };
+}
+
 function mergeAlertConditions(input: PartialAlertConditionConfig[] | undefined) {
   if (!input || input.length === 0) return [];
   const conditions = [];
@@ -203,7 +221,7 @@ export function mergeConfig(input: PartialImmersiveWeatherCardConfig | undefined
     image_url: input.image_url ?? base.image_url,
     entities: { ...base.entities, ...(input.entities ?? {}) },
     animation: { ...base.animation, ...(input.animation ?? {}) },
-    scene: { ...base.scene, ...(input.scene ?? {}) },
+    scene: mergeScene(input.scene),
     appearance: { ...base.appearance, ...(input.appearance ?? {}) },
     forecast: { ...base.forecast, ...(input.forecast ?? {}) },
     metrics: mergeMetrics(input.metrics),
