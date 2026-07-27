@@ -1,6 +1,6 @@
 {
   "name": "immersive-weather-dashboard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A full-screen, procedurally animated Home Assistant weather Lovelace card with a graphical editor.",
   "type": "module",
   "license": "MIT",

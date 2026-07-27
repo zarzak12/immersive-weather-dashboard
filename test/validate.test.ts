@@ -56,4 +56,28 @@ describe('validateConfig', () => {
     const issues = validateConfig(config, undefined);
     expect(issues.length).toBeGreaterThanOrEqual(3);
   });
+
+  it('flags incomplete and missing alert condition entities', () => {
+    const config = {
+      ...defaultConfig(),
+      alerts: [
+        {
+          id: 'alert-1',
+          enabled: true,
+          name: 'Open windows',
+          message: '',
+          severity: 'warning' as const,
+          logic: 'all' as const,
+          conditions: [
+            { id: 'condition-1', entity_id: '', operator: 'gt' as const, threshold: 1000 },
+            { id: 'condition-2', entity_id: 'sensor.missing', operator: 'between' as const, threshold: 12 }
+          ]
+        }
+      ]
+    };
+    const issues = validateConfig(config, makeHass([]));
+    expect(issues.some((issue) => issue.messageKey === 'validation.alert_entity_required')).toBe(true);
+    expect(issues.some((issue) => issue.messageKey === 'validation.alert_entity_not_found')).toBe(true);
+    expect(issues.some((issue) => issue.messageKey === 'validation.alert_range_incomplete')).toBe(true);
+  });
 });

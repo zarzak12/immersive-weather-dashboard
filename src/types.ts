@@ -51,6 +51,7 @@ export type SceneMode = 'auto' | 'day' | 'night';
 export type Density = 'comfortable' | 'compact';
 
 export const METRIC_KEYS = [
+  'outdoor_temperature',
   'apparent_temperature',
   'humidity',
   'pressure',
@@ -111,6 +112,69 @@ export interface ForecastConfig {
   daily_count: number;
 }
 
+/** Environmental zone kinds: an indoor room or an outdoor location. */
+export type EnvironmentZoneKind = 'indoor' | 'outdoor';
+
+export const ENVIRONMENT_ZONE_ENTITY_KEYS = ['temperature', 'humidity', 'aqi', 'co2', 'pm2_5', 'pm10', 'voc'] as const;
+export type EnvironmentZoneEntityKey = (typeof ENVIRONMENT_ZONE_ENTITY_KEYS)[number];
+
+export type EnvironmentZoneEntities = Partial<Record<EnvironmentZoneEntityKey, string>>;
+
+/**
+ * A user-defined environmental zone (an indoor room or an outdoor location)
+ * with manually mapped entities. Zone assignment is intentionally manual —
+ * there is no semantic auto-detection of "which room is this sensor in".
+ */
+export interface EnvironmentZoneConfig {
+  id: string;
+  name: string;
+  kind: EnvironmentZoneKind;
+  visible: boolean;
+  entities: EnvironmentZoneEntities;
+}
+
+export type PartialEnvironmentZoneConfig = Partial<Omit<EnvironmentZoneConfig, 'entities'>> & {
+  entities?: EnvironmentZoneEntities;
+};
+
+export const ALERT_OPERATORS = ['gt', 'gte', 'lt', 'lte', 'between', 'outside', 'eq'] as const;
+export type AlertOperator = (typeof ALERT_OPERATORS)[number];
+
+export const ALERT_SEVERITIES = ['info', 'warning', 'critical'] as const;
+export type AlertSeverity = (typeof ALERT_SEVERITIES)[number];
+
+export const ALERT_LOGICS = ['all', 'any'] as const;
+export type AlertLogic = (typeof ALERT_LOGICS)[number];
+
+export interface AlertConditionConfig {
+  id: string;
+  entity_id: string;
+  operator: AlertOperator;
+  threshold: number;
+  threshold2?: number;
+}
+
+export type PartialAlertConditionConfig = Partial<AlertConditionConfig>;
+
+/**
+ * A user-built, display-only recommendation rule (e.g. "Open the windows").
+ * Rules are evaluated purely client-side while the card is rendered; they
+ * never call Home Assistant services or fire notifications.
+ */
+export interface AlertRuleConfig {
+  id: string;
+  enabled: boolean;
+  name: string;
+  message: string;
+  severity: AlertSeverity;
+  logic: AlertLogic;
+  conditions: AlertConditionConfig[];
+}
+
+export type PartialAlertRuleConfig = Partial<Omit<AlertRuleConfig, 'conditions'>> & {
+  conditions?: PartialAlertConditionConfig[];
+};
+
 export interface ImmersiveWeatherCardConfig {
   type: string;
   title?: string;
@@ -122,10 +186,15 @@ export interface ImmersiveWeatherCardConfig {
   appearance: AppearanceConfig;
   forecast: ForecastConfig;
   metrics: MetricConfig[];
+  environment_zones: EnvironmentZoneConfig[];
+  alerts: AlertRuleConfig[];
 }
 
 export type PartialImmersiveWeatherCardConfig = Partial<
-  Omit<ImmersiveWeatherCardConfig, 'entities' | 'animation' | 'scene' | 'appearance' | 'forecast' | 'metrics'>
+  Omit<
+    ImmersiveWeatherCardConfig,
+    'entities' | 'animation' | 'scene' | 'appearance' | 'forecast' | 'metrics' | 'environment_zones' | 'alerts'
+  >
 > & {
   entities?: ManualEntityMap;
   animation?: Partial<AnimationConfig>;
@@ -133,6 +202,8 @@ export type PartialImmersiveWeatherCardConfig = Partial<
   appearance?: Partial<AppearanceConfig>;
   forecast?: Partial<ForecastConfig>;
   metrics?: Partial<MetricConfig>[];
+  environment_zones?: PartialEnvironmentZoneConfig[];
+  alerts?: PartialAlertRuleConfig[];
 };
 
 export interface LovelaceCardConfig {

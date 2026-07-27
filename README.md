@@ -15,14 +15,19 @@
   - [HACS (recommended)](#hacs-recommended)
   - [Manual installation](#manual-installation)
 - [Visual setup, step by step](#visual-setup-step-by-step)
+- [Layout: scene viewport and information area](#layout-scene-viewport-and-information-area)
 - [How the image layering works](#how-the-image-layering-works)
 - [Configuration reference](#configuration-reference)
 - [Auto-discovery algorithm and manual overrides](#auto-discovery-algorithm-and-manual-overrides)
+- [Entity mapping tab and outdoor station overrides (e.g. an ESP32 weather station)](#entity-mapping-tab-and-outdoor-station-overrides-eg-an-esp32-weather-station)
 - [Metric / entity reference table](#metric--entity-reference-table)
+- [Environment zones (unlimited indoor/outdoor rooms and air quality)](#environment-zones-unlimited-indooroutdoor-rooms-and-air-quality)
+- [Visual alert / recommendation rules](#visual-alert--recommendation-rules)
 - [Forecasts](#forecasts)
 - [Responsiveness, performance, accessibility, privacy](#responsiveness-performance-accessibility-privacy)
 - [Troubleshooting](#troubleshooting)
 - [Updating and removing the card](#updating-and-removing-the-card)
+- [Migration and configuration compatibility](#migration-and-configuration-compatibility)
 - [Development](#development)
 - [FAQ](#faq)
 - [Limitations](#limitations)
@@ -37,11 +42,13 @@ The result is a dashboard/wall-panel card that feels alive and reacts to your ac
 
 ## Feature tour
 
-- Full-screen immersive layout, designed for phones, tablets, desktop dashboards and wall-mounted panels.
+- Full-screen immersive layout, designed for phones, tablets, desktop dashboards and wall-mounted panels. By default the animated **scene stays a compact, unobstructed viewport at the top** of the card, with all metrics, zones, alerts and forecasts flowing naturally below it — nothing overlaps the house photo or the sky.
 - Procedural sky/weather engine: day/night gradient, sun, moon, twinkling stars, drifting clouds, rain, pouring rain, snow, snow+rain mix, hail, fog, wind streaks, lightning flashes for thunderstorms.
-- Discreet glassmorphism panels (blurred, translucent) for the current conditions, the metrics station and the forecasts, so the scene stays visible underneath.
-- Full graphical configuration — **no YAML editing is required** after installing through HACS. Every option (image, colors, opacity, metrics, forecasts…) has a UI control.
-- Reliable automatic entity detection with a deterministic scoring algorithm, plus per-metric manual override.
+- Discreet glassmorphism panels (blurred, translucent) for the current conditions, the outdoor station, environment zones, alerts and the forecasts, so the scene stays visible underneath and the information underneath stays fully readable.
+- Full graphical configuration — **no YAML editing is required** after installing through HACS. Every option (image, colors, opacity, metrics, environment zones, alert rules, forecasts…) has a UI control.
+- Reliable automatic entity detection with a deterministic scoring algorithm that **rejects sensors whose `device_class` is explicitly incompatible** with the metric (so, for example, an "apparent power" sensor can never be mistaken for "feels like" temperature just because both mention "apparent"), plus a dedicated **Entity mapping** tab for manual overrides — ideal for wiring up a real outdoor weather station (e.g. an ESP32-based one) to override provider-supplied outdoor temperature/humidity/pressure.
+- **Unlimited environment zones** — add as many indoor and/or outdoor zones as you like (bedrooms, living room, garage, greenhouse…), each with its own manually-mapped temperature, humidity and air-quality (AQI, CO₂, PM2.5, PM10, VOC) entities.
+- **Visual, display-only alert/recommendation rules** — build your own multi-condition recommendations (e.g. "Open the windows") from any numeric entities, shown prominently at the top of the information area. These are purely visual and only evaluated while the card is on screen; the card never calls Home Assistant services or fires notifications.
 - Live forecast subscriptions using the modern `weather/subscribe_forecast` WebSocket API (daily and hourly), with graceful handling when a weather integration does not support a given forecast type.
 - Respects `prefers-reduced-motion`, pauses rendering when the card is scrolled off-screen or the browser tab is hidden, and caps the device pixel ratio to control GPU/CPU cost.
 - Animation quality and intensity controls so low-power wall tablets and Raspberry Pi displays stay smooth.
@@ -84,10 +91,22 @@ HACS installs the single bundled file `dist/immersive-weather-dashboard.js` and 
 2. Upload the file to `config/www/` (for example `config/www/house.png`), so it is reachable at `/local/house.png`, or host it on any HTTPS URL you control.
 3. Add the card to a dashboard, open the card editor, and in the **Image & scene** tab paste the image path (`/local/house.png`) into **House image URL**.
 4. Pick your **Weather entity** in the **Data source** tab, or leave it empty to let the card auto-detect the best one.
-5. Adjust **Appearance** (panel opacity/blur/corner radius, accent/text colors, minimum height, density) to match your theme and screen.
+5. Adjust **Appearance** (panel opacity/blur/corner radius, accent/text colors, scene minimum height, scene aspect ratio, density) to match your theme and screen — these now size the top **scene viewport only**, not the whole card (see [Layout](#layout-scene-viewport-and-information-area)).
 6. Enable/disable **Forecasts** and choose how many hourly/daily items to display.
-7. Open **Station metrics** to reorder, hide, relabel, recolor or manually re-map any of the sixteen supported metrics.
-8. Optionally click **Auto-configure** once you are happy with the automatic detections, to freeze them into the saved configuration (see [Auto-discovery](#auto-discovery-algorithm-and-manual-overrides)).
+7. Open **Station metrics** to reorder, hide, relabel, recolor or restyle any of the seventeen supported metrics (including the new **outdoor temperature**).
+8. Open **Entity mapping / Association des entités** to see, for every metric, exactly which entity or weather attribute the card resolved, and to type a manual override — this is where you point the card at your own outdoor weather station (e.g. an ESP32) instead of your weather provider (see [Entity mapping tab](#entity-mapping-tab-and-outdoor-station-overrides-eg-an-esp32-weather-station)).
+9. Open **Environment / Environnement** to add any number of indoor/outdoor zones (bedroom, living room, garage…) and manually map their temperature/humidity/air-quality entities.
+10. Open **Alerts / Alertes** to build your own visual recommendation rules (for example "Open the windows") from any numeric entities (see [Visual alert rules](#visual-alert--recommendation-rules)).
+11. Optionally click **Auto-configure** once you are happy with the automatic detections, to freeze them into the saved configuration (see [Auto-discovery](#auto-discovery-algorithm-and-manual-overrides)).
+
+## Layout: scene viewport and information area
+
+Starting with v1.0.1, the card is split into two clearly separated regions, stacked vertically in normal document flow:
+
+1. **The scene** — a fixed-height viewport at the top containing only the animated sky/weather canvases, your house photo, and a small title/current-condition summary overlay. `Appearance → Minimum height` and `Appearance → Aspect ratio` size **this viewport only**. The scene never grows to accommodate other content and nothing else is drawn on top of it, so your house photo and the animation stay fully visible.
+2. **The information area** — a normal-flow section below the scene containing, in order: active alert recommendations, the outdoor station metrics, environment zone cards, and forecasts. This area has **no forced height or clipping**: the card grows naturally to fit however much information you have configured, and Home Assistant's Sections view is told to honor that natural height (no more forced 8-row minimum). Forecast rows may scroll horizontally on narrow screens, but the rest of the information area is never hidden or cut off.
+
+This directly replaces the v1.0 behavior, where every panel was absolutely positioned on top of the scene (covering most of the house/sky) inside a height-constrained `.scene` element. If you are upgrading from v1.0, expect the card to look different immediately after updating — taller overall, but with an unobstructed scene and fully readable information beneath it — see [Migration and configuration compatibility](#migration-and-configuration-compatibility).
 
 ## How the image layering works
 
@@ -106,10 +125,13 @@ Everything below is configurable from the graphical editor. No YAML editing is r
 | Editor tab | Options |
 | --- | --- |
 | Data source | Card title, weather entity (or auto-detect) |
+| Entity mapping / Association des entités | For every outdoor station metric: resolved source type, the exact resolved entity ID (or weather attribute), a searchable manual entity override, and a clear-override control |
 | Image & scene | House image URL, day/night mode (auto/day/night), animation on/off, animation quality (low/medium/high), animation intensity (0–2) |
-| Appearance | Panel opacity, panel blur, panel corner radius, accent color, text color, minimum card height, aspect ratio, density (comfortable/compact) |
+| Appearance | Panel opacity, panel blur, panel corner radius, accent color, text color, scene minimum height, scene aspect ratio, density (comfortable/compact) |
 | Forecasts | Show/hide hourly forecast, show/hide daily forecast, number of hourly items, number of daily items |
-| Station metrics | Per metric: visible, custom label, custom color, custom icon, manual entity override, and a read-only "source" indicator (manual / weather attribute / sensor / not available) |
+| Station metrics | Per metric: visible, custom label, custom color, custom icon, and a read-only "source" indicator (manual / weather attribute / sensor / not available) — manual entity overrides now live in the **Entity mapping** tab |
+| Environment / Environnement | Add/remove/reorder an unlimited number of zones; per zone: name, indoor/outdoor kind, visibility, manual entity mapping for temperature, humidity, AQI, CO₂, PM2.5, PM10 and VOC |
+| Alerts / Alertes | Add/remove visual recommendation rules; per rule: name, message, severity, all/any logic, enabled toggle, and one or more numeric conditions (entity, operator, threshold(s)) |
 
 Two dedicated actions are always available:
 
@@ -118,11 +140,11 @@ Two dedicated actions are always available:
 
 ## Auto-discovery algorithm and manual overrides
 
-For every one of the sixteen supported metrics, the card resolves a value using this strict priority order:
+For every one of the seventeen supported metrics, the card resolves a value using this strict priority order:
 
-1. **Manual override** — the entity you picked explicitly for that metric in the editor. If it exists but is `unavailable`/`unknown`, the metric is shown as unavailable rather than silently falling through (so misconfiguration is visible).
-2. **Weather entity attribute** — if the selected weather entity exposes a matching attribute (e.g. `humidity`, `pressure`, `wind_speed`, `wind_bearing`, `wind_gust_speed`, `uv_index`, `visibility`, `dew_point`, `cloud_coverage`, `ozone`, `apparent_temperature`), it is used directly.
-3. **Best-scoring sensor entity** — the card scores every `sensor.*` (and `air_quality.*` for air quality) entity in your system against the metric: `+10` for a matching `device_class`, `+5` for a matching keyword in the entity ID, `+3` for a matching keyword in the friendly name. Metrics whose device class is ambiguous (for example dew point versus any temperature, gust versus average wind, or sunrise versus any timestamp) additionally require a semantic keyword. Entities that are `unavailable`/`unknown`, belong to a disallowed domain, or fail this semantic guard are rejected outright so they cannot be picked by accident. The highest-scoring entity wins; ties are broken alphabetically by entity ID for determinism.
+1. **Manual override** — the entity you picked explicitly for that metric (in the **Entity mapping** tab). If it exists but is `unavailable`/`unknown`, the metric is shown as unavailable rather than silently falling through (so misconfiguration is visible); if the entity ID does not exist at all, the editor surfaces a validation notice instead of silently ignoring it.
+2. **Weather entity attribute** — if the selected weather entity exposes a matching attribute (e.g. `temperature`, `humidity`, `pressure`, `wind_speed`, `wind_bearing`, `wind_gust_speed`, `uv_index`, `visibility`, `dew_point`, `cloud_coverage`, `ozone`, `apparent_temperature`), it is used directly.
+3. **Best-scoring sensor entity** — the card scores every `sensor.*` (and `air_quality.*` for air quality) entity in your system against the metric: `+10` for a matching `device_class`, `+5` for a matching keyword in the entity ID, `+3` for a matching keyword in the friendly name. **An entity that declares a `device_class` which is not one of the metric's accepted classes is rejected outright**, even if its ID or friendly name happens to contain a matching keyword — this specifically prevents, for example, an "apparent power" sensor (`device_class: apparent_power`, reporting VA) from ever being picked for "feels like" temperature just because both mention "apparent". Metrics whose device class is ambiguous (for example dew point versus any temperature, gust versus average wind, or sunrise versus any timestamp) additionally require a semantic keyword. Entities that are `unavailable`/`unknown`, belong to a disallowed domain, or fail these guards are rejected outright so they cannot be picked by accident. The highest-scoring entity wins; ties are broken alphabetically by entity ID for determinism.
 4. **`sun.sun` entity** — used only for sunrise/sunset, reading `next_rising`/`next_setting` when no sensor was found.
 5. **Not available** — if nothing qualifies, the metric is simply omitted from the station rather than showing a misleading zero.
 
@@ -130,12 +152,35 @@ The weather entity itself is auto-selected similarly: your configured `weather.*
 
 This algorithm runs live every time the card renders, so it naturally adapts if you add, rename or replace entities — except when you have explicitly used **Auto-configure**, which freezes the current detections into the saved configuration.
 
+## Entity mapping tab and outdoor station overrides (e.g. an ESP32 weather station)
+
+The **Entity mapping / Association des entités** editor tab is the single, obvious place to see and control exactly which entity feeds each outdoor station metric. For every metric it shows:
+
+- the metric's label;
+- the **resolved source type** (manual override / weather attribute / sensor / not available);
+- the **exact currently resolved entity ID** (or the weather attribute name, when that's the source);
+- a text input with a searchable, typeable suggestion list (`<datalist>`) of compatible entities — showing friendly names and units where available — so you can either pick a suggestion or type any valid entity ID by hand;
+- a **Clear override** button to remove a manual mapping and fall back to auto-detection.
+
+A manual override here always takes priority over auto-detection. If you type an entity ID that does not exist in your Home Assistant instance, the tab shows a validation notice instead of silently ignoring your input.
+
+**Example: overriding outdoor temperature/humidity/pressure with a real ESP32 weather station**
+
+1. Make sure your ESP32 station's readings are available as Home Assistant sensor entities (e.g. via ESPHome, MQTT or Tasmota), for example `sensor.esp32_outdoor_temperature`, `sensor.esp32_outdoor_humidity`, `sensor.esp32_outdoor_pressure`.
+2. Open the card editor → **Entity mapping / Association des entités**.
+3. Find **Outdoor temperature**, type or pick `sensor.esp32_outdoor_temperature` in its override field, then click/tab away to confirm — the row updates to show it as the resolved source.
+4. Repeat for **Outdoor humidity** and **Pressure** with your ESP32 humidity/pressure sensors.
+5. The current-condition summary at the top of the scene and the outdoor station metric both immediately reflect your ESP32 readings instead of your weather provider's data; if your ESP32 sensor becomes unavailable, the card falls back to the weather-provider value automatically.
+
+Entity override inputs update on change/blur, not on every keystroke, so you can type a full entity ID without the card fighting your typing.
+
 ## Metric / entity reference table
 
 | Metric | Weather attribute used | Sensor `device_class` | Typical keywords |
 | --- | --- | --- | --- |
+| Outdoor temperature | `temperature` | `temperature` | outdoor, exterieur, dehors, temperature |
 | Feels like (apparent temperature) | `apparent_temperature` | `temperature` | feels_like, apparent, ressenti |
-| Humidity | `humidity` | `humidity` | humidity, humidite |
+| Outdoor humidity | `humidity` | `humidity` | humidity, humidite |
 | Pressure | `pressure` | `pressure`, `atmospheric_pressure` | pressure, pression |
 | Wind speed | `wind_speed` | `wind_speed` | wind_speed, vitesse_vent |
 | Wind direction | `wind_bearing` | — | wind_bearing, wind_direction |
@@ -151,30 +196,82 @@ This algorithm runs live every time the card renders, so it naturally adapts if 
 | Sunrise | `sun.sun` `next_rising` (fallback) | `timestamp` | sunrise, lever_soleil |
 | Sunset | `sun.sun` `next_setting` (fallback) | `timestamp` | sunset, coucher_soleil |
 
-## Forecasts
+## Environment zones (unlimited indoor/outdoor rooms and air quality)
+
+Beyond the single outdoor station, the **Environment / Environnement** tab lets you define **any number of environment zones** — for example "Bedroom", "Living room", "Garage", "Greenhouse" or a second outdoor location. Each zone is entirely manually configured (no auto-detection is attempted for room assignment, since only you know which sensor belongs to which room):
+
+- a stable name you choose;
+- a kind: **indoor** or **outdoor**;
+- a visibility toggle (hide a zone from the rendered card without deleting its configuration);
+- manual entity mappings, each with a searchable/typeable entity input, for: **temperature**, **humidity**, **AQI**, **CO₂**, **PM2.5**, **PM10** and **VOC** — map only the ones relevant to that zone, the rest are simply omitted.
+
+Visible zones render as responsive cards below the outdoor station, each showing the zone name/type and every configured value with a localized label, icon and unit. If a configured entity is missing or unavailable, its row visibly shows an em dash (`—`) and a validation notice, rather than silently disappearing — so misconfiguration is always visible, never hidden.
+
+This is how the card supports, for example, tracking both indoor CO₂/AQI in a bedroom and outdoor AQI/PM2.5 at the same time, or comparing temperature/humidity across several rooms.
+
+## Visual alert / recommendation rules
+
+The **Alerts / Alertes** tab lets you build your own **display-only visual recommendations**, evaluated live from any numeric entities in your system — for example a reminder to open the windows when indoor air quality would benefit from it. Each rule has:
+
+- a name and a recommendation message shown to you when the rule is active;
+- a severity: **info**, **warning** or **critical** (each rendered with a distinct color/icon);
+- a logic: **all** conditions must be met, or **any** one of them;
+- an enabled/disabled toggle;
+- one or more numeric conditions, each with an entity ID, an operator (`>`, `≥`, `<`, `≤`, `=`, **between**, **outside**) and one or two threshold values.
+
+**Example: "Open the windows"**
+
+| Condition | Entity | Operator | Threshold(s) |
+| --- | --- | --- | --- |
+| Indoor CO₂ is high | `sensor.bedroom_co2` | greater than (`gt`) | 1000 ppm |
+| Outdoor air quality is good | `sensor.outdoor_aqi` | less than (`lt`) | 50 |
+| Outdoor temperature is comfortable | `sensor.esp32_outdoor_temperature` | between | 12 and 28 |
+
+With logic set to **all**, this rule becomes active — and shows a prominent recommendation at the top of the information area — only when every one of those three conditions is simultaneously true. This example is **documented here only**; the card does not ship it as an active default, because entity IDs are specific to your own installation. Build your own rules from your own entities in the **Alerts** tab.
+
+**Important limitations, by design:**
+
+- Alerts are **purely visual recommendations** rendered inside the card. They never call a Home Assistant service, never trigger a notification, and never run an automation.
+- A rule is only ever evaluated **while this Lovelace card is actually rendered on screen** (open dashboard, visible tab). A Lovelace card has no background process, so there is no way for it to notify you when it isn't displayed — use a proper Home Assistant automation/notification if you need alerts to reach you when you're not looking at the dashboard.
+- A rule referencing a missing, unavailable or non-numeric entity, or with no conditions, or that is disabled, is always treated as inactive rather than throwing an error or showing stale data.
+- `between` is inclusive of both thresholds; `outside` is strictly exclusive of the range between them.
 
 Since forecasts are no longer exposed as weather-entity state attributes in modern Home Assistant, the card subscribes to live forecast updates using the `weather/subscribe_forecast` WebSocket command, separately for `daily` and `hourly` forecast types. If your weather integration does not support a given forecast type, the subscription attempt is handled explicitly (not silently swallowed) and that section is simply hidden — you will not see a broken loading spinner. Subscriptions are automatically renewed if you change the weather entity or forecast settings, and cleanly unsubscribed when the card is removed or leaves the dashboard.
 
 ## Responsiveness, performance, accessibility, privacy
 
-- **Responsive** — the scene fills its container and adapts to phones, tablets, desktop cards and wall panels; panel density and font sizes adjust at small widths.
-- **Performance** — animation quality/intensity are configurable; the device pixel ratio used for canvases is capped at 2 to avoid excessive GPU/CPU load on high-DPI displays; rendering pauses automatically when the card scrolls off-screen (`IntersectionObserver`) or the browser tab is hidden (`visibilitychange`).
+- **Responsive** — the scene viewport fills its container and adapts to phones, tablets, desktop cards and wall panels; on narrow/mobile screens the entire scene is shown first, followed by the full information area — nothing is hidden, only forecast rows may scroll horizontally. Panel density and font sizes adjust at small widths.
+- **Performance** — animation quality/intensity are configurable; the device pixel ratio used for canvases is capped at 2 to avoid excessive GPU/CPU load on high-DPI displays; rendering pauses automatically when the card scrolls off-screen (`IntersectionObserver`) or the browser tab is hidden (`visibilitychange`). The renderer's `ResizeObserver` stays attached to the scene viewport, so resizing/reconnecting the card (e.g. switching dashboards) keeps the animation correctly sized.
 - **Accessibility** — the renderer honors the operating system's `prefers-reduced-motion` setting: a single static frame is drawn instead of a continuous animation loop.
-- **Privacy** — the card makes **no network calls of its own** at runtime beyond what your Home Assistant frontend already does (loading your configured house image and talking to your own Home Assistant instance). There is no telemetry, analytics, or third-party service involved in rendering the weather scene.
+- **Privacy** — the card makes **no network calls of its own** at runtime beyond what your Home Assistant frontend already does (loading your configured house image and talking to your own Home Assistant instance). There is no telemetry, analytics, or third-party service involved in rendering the weather scene. Alert rules are evaluated **entirely locally in the browser**, only while the card is rendered — nothing is sent anywhere and no Home Assistant service/notification is ever triggered by them.
 
 ## Troubleshooting
 
 - **The card does not appear in the picker** — make sure the Lovelace resource was registered (HACS does this automatically; for manual installs check **Settings → Dashboards → Resources**), then hard-reload the browser tab (Ctrl/Cmd+Shift+R) to bypass the cache.
 - **"No weather entity found"** — either pick one explicitly in the editor or make sure at least one `weather.*` entity is available (not `unavailable`/`unknown`).
-- **A metric shows nothing** — check the "source" indicator in the **Station metrics** tab: it tells you whether the value comes from a manual override, a weather attribute, or a sensor, and whether none could be found.
+- **A metric shows nothing** — open the **Entity mapping** tab: it shows, for every metric, the exact resolved entity/attribute and the resolution source (manual override / weather attribute / sensor / not available).
+- **A metric auto-matched the wrong entity** (for example a power/energy sensor being picked up for a temperature-like metric because its name contains a matching keyword) — this class of bug is specifically guarded against: an entity whose `device_class` is set and does not match the metric's accepted device classes is now always rejected, regardless of keyword matches in its ID or friendly name. If you still see an incorrect auto-match, open **Entity mapping**, check the entity ID shown as "resolved", and set an explicit manual override there — manual overrides always win over auto-detection.
+- **Environment zone row shows an em dash (—)** — the entity mapped to that row in the **Environment** tab is missing or unavailable; check the zone's validation notice and fix the entity ID or the sensor itself.
+- **An alert never appears** — make sure the rule is enabled, has at least one condition, and that every referenced entity is available and reporting a numeric state; for **all** logic every condition must be true simultaneously, for **any** logic only one needs to be. Remember alerts are only evaluated while the card is actually on screen.
 - **Forecasts don't show up** — your weather integration may not support the `hourly` or `daily` forecast type; this is reported as "not supported" internally rather than as an error, and the corresponding forecast row is hidden.
-- **Old configuration after an update** — configurations are merged with current defaults on load, so older or partial configurations keep working; if a field looks wrong, open the editor, it will show the effective values.
+- **Old configuration after an update** — configurations are merged with current defaults on load, so older or partial configurations keep working; if a field looks wrong, open the editor, it will show the effective values. See [Migration and configuration compatibility](#migration-and-configuration-compatibility).
 - **Blank/black scene** — verify your image URL is reachable (open it directly in a browser tab); if the URL is wrong, the sky animation still renders but without your house photo.
+- **The card looks taller than before after updating** — this is expected: as of v1.0.1 the information area grows naturally below the scene instead of being clipped on top of it. See [Layout](#layout-scene-viewport-and-information-area).
 
 ## Updating and removing the card
 
 - **Update** — HACS will notify you of new versions; click "Update" and reload the frontend afterwards.
 - **Remove** — remove the card from your dashboards, then remove the repository from HACS (or delete the resource and the file for manual installs). No entities, automations or persistent background services are created by this card, so removal is immediate and clean.
+
+## Migration and configuration compatibility
+
+Upgrading from v1.0.0 is **safe and requires no manual configuration changes**:
+
+- Existing configurations continue to work as-is; every new field (`environment_zones`, `alerts`, the outdoor temperature metric, per-metric manual mapping) is merged with safe defaults (`[]` for zones/alerts) if absent from your saved YAML/config.
+- The previously existing `humidity` metric key and its manual override are preserved unchanged — it is now labeled "Outdoor humidity" in the UI, but the underlying entity mapping and config key are untouched.
+- Visually, the card will look different immediately after updating: the scene becomes a smaller, unobstructed top viewport, and all metrics/forecasts move into a natural-flow information area below it that can make the overall card taller. `Appearance → Minimum height`/`Aspect ratio` now size the scene only; if your card looks too short or too tall, revisit those two settings.
+- No entity mapping is lost: any manual overrides you had configured for existing metrics keep working and are now edited from the new **Entity mapping** tab instead of the old inline selects on the **Station metrics** tab.
+- `environment_zones` and `alerts` start empty; nothing is auto-populated on your behalf, since zone/room assignment and alert thresholds are inherently specific to your home and are always manually configured.
 
 ## Development
 
@@ -212,12 +309,18 @@ The release workflow builds and attaches the exact file expected by `hacs.json`.
 
 **Which weather integrations are supported?** Any integration that provides a standard `weather.*` entity. Forecast support depends on whether that integration implements the `hourly`/`daily` forecast WebSocket subscriptions.
 
+**Will alert rules send me a notification if I'm not looking at the dashboard?** No. Alerts are visual, display-only recommendations rendered inside the card and evaluated only while it is on screen; a Lovelace card cannot run in the background, so it never calls a Home Assistant service or notification. Use a Home Assistant automation if you need to be notified elsewhere.
+
+**Can I use my own weather station (e.g. ESP32) instead of provider data?** Yes — map its sensor entities to the outdoor metrics (temperature, humidity, pressure…) in the **Entity mapping** tab; manual overrides always take priority over the weather provider.
+
 ## Limitations
 
 - The renderer is **procedural and stylized**, not a photorealistic weather simulation or a licensed video/photo weather service; do not expect cinematic realism.
 - Precipitation, cloud and lightning visuals are approximations driven by the weather entity's reported condition, not physically accurate simulations.
 - The quality of the "see-through sky" effect depends entirely on the quality of your image's alpha cut-out.
 - Extremely large/unoptimized house images can slow down the initial load of the card; see the resolution guidance below.
+- Environment zone and alert entity mappings are **intentionally manual** — the card does not attempt to guess which sensor belongs to which room, since that assignment is inherently specific to your home.
+- Alert rules are **display-only**: they never trigger Home Assistant notifications, services or automations, and are only evaluated while the card is actually rendered on screen.
 
 ## AI prompt to prepare your house photo
 

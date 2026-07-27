@@ -31,6 +31,45 @@ export function validateConfig(config: ImmersiveWeatherCardConfig, hass: HomeAss
     }
   }
 
+  for (const zone of config.environment_zones) {
+    for (const [metric, entityId] of Object.entries(zone.entities)) {
+      if (!entityId) continue;
+      const state = hass?.states[entityId];
+      if (!state) {
+        issues.push({
+          field: `environment_zones.${zone.id}.${metric}`,
+          messageKey: 'validation.zone_entity_not_found',
+          vars: { entity: entityId, zone: zone.name || zone.id }
+        });
+      }
+    }
+  }
+
+  for (const rule of config.alerts) {
+    for (const condition of rule.conditions) {
+      if (!condition.entity_id) {
+        issues.push({
+          field: `alerts.${rule.id}.${condition.id}`,
+          messageKey: 'validation.alert_entity_required',
+          vars: { alert: rule.name || rule.id }
+        });
+      } else if (hass && !hass.states[condition.entity_id]) {
+        issues.push({
+          field: `alerts.${rule.id}.${condition.id}`,
+          messageKey: 'validation.alert_entity_not_found',
+          vars: { entity: condition.entity_id, alert: rule.name || rule.id }
+        });
+      }
+      if ((condition.operator === 'between' || condition.operator === 'outside') && condition.threshold2 === undefined) {
+        issues.push({
+          field: `alerts.${rule.id}.${condition.id}.threshold2`,
+          messageKey: 'validation.alert_range_incomplete',
+          vars: { alert: rule.name || rule.id }
+        });
+      }
+    }
+  }
+
   if (config.appearance.panel_opacity < 0 || config.appearance.panel_opacity > 1) {
     issues.push({ field: 'appearance.panel_opacity', messageKey: 'validation.panel_opacity' });
   }

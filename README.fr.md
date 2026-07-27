@@ -15,14 +15,19 @@
   - [HACS (recommandé)](#hacs-recommandé)
   - [Installation manuelle](#installation-manuelle)
 - [Configuration visuelle, étape par étape](#configuration-visuelle-étape-par-étape)
+- [Mise en page : scène et zone d'informations](#mise-en-page--scène-et-zone-dinformations)
 - [Comment fonctionne la superposition d'images](#comment-fonctionne-la-superposition-dimages)
 - [Référence de configuration](#référence-de-configuration)
 - [Algorithme de détection automatique et remplacements manuels](#algorithme-de-détection-automatique-et-remplacements-manuels)
+- [Onglet Association des entités et remplacements de la station extérieure (ex. station ESP32)](#onglet-association-des-entités-et-remplacements-de-la-station-extérieure-ex-station-esp32)
 - [Tableau de référence des indicateurs / entités](#tableau-de-référence-des-indicateurs--entités)
+- [Zones environnementales (pièces intérieures/extérieures illimitées et qualité de l'air)](#zones-environnementales-pièces-intérieuresextérieures-illimitées-et-qualité-de-lair)
+- [Règles d'alerte / recommandation visuelle](#règles-dalerte--recommandation-visuelle)
 - [Prévisions](#prévisions)
 - [Réactivité, performance, accessibilité, confidentialité](#réactivité-performance-accessibilité-confidentialité)
 - [Dépannage](#dépannage)
 - [Mise à jour et suppression de la carte](#mise-à-jour-et-suppression-de-la-carte)
+- [Migration et compatibilité de la configuration](#migration-et-compatibilité-de-la-configuration)
 - [Développement](#développement)
 - [FAQ](#faq)
 - [Limites](#limites)
@@ -37,11 +42,13 @@ Le résultat est une carte de tableau de bord/écran mural qui semble vivante et
 
 ## Tour des fonctionnalités
 
-- Mise en page immersive plein écran, conçue pour smartphones, tablettes, tableaux de bord de bureau et écrans muraux.
+- Mise en page immersive plein écran, conçue pour smartphones, tablettes, tableaux de bord de bureau et écrans muraux. Par défaut, la **scène animée reste un viewport compact et dégagé en haut** de la carte, tandis que tous les indicateurs, zones, alertes et prévisions s'affichent naturellement en dessous — rien ne recouvre la photo de maison ni le ciel.
 - Moteur météo/ciel procédural : dégradé jour/nuit, soleil, lune, étoiles scintillantes, nuages en dérive, pluie, pluie battante, neige, mélange neige/pluie, grêle, brouillard, rafales de vent, éclairs pour les orages.
-- Panneaux « glassmorphism » discrets (flous, translucides) pour les conditions actuelles, la station d'indicateurs et les prévisions, afin que la scène reste visible en dessous.
-- Configuration graphique complète — **aucune édition YAML n'est nécessaire** après l'installation via HACS. Chaque option (image, couleurs, opacité, indicateurs, prévisions…) dispose d'un contrôle dans l'interface.
-- Détection automatique fiable des entités grâce à un algorithme de score déterministe, avec remplacement manuel possible pour chaque indicateur.
+- Panneaux « glassmorphism » discrets (flous, translucides) pour les conditions actuelles, la station extérieure, les zones environnementales, les alertes et les prévisions, afin que la scène reste visible en dessous et que les informations restent parfaitement lisibles.
+- Configuration graphique complète — **aucune édition YAML n'est nécessaire** après l'installation via HACS. Chaque option (image, couleurs, opacité, indicateurs, zones environnementales, règles d'alerte, prévisions…) dispose d'un contrôle dans l'interface.
+- Détection automatique fiable des entités grâce à un algorithme de score déterministe qui **rejette les capteurs dont la `device_class` est explicitement incompatible** avec l'indicateur (par exemple, un capteur de « puissance apparente » ne peut plus jamais être confondu avec le « ressenti » simplement parce que les deux mentionnent « apparent »), ainsi qu'un onglet dédié **Association des entités** pour les remplacements manuels — idéal pour relier une véritable station météo extérieure (par exemple à base d'ESP32) afin qu'elle remplace les données du fournisseur météo.
+- **Zones environnementales illimitées** — ajoutez autant de zones intérieures et/ou extérieures que vous le souhaitez (chambres, salon, garage, serre…), chacune avec ses propres entités de température, d'humidité et de qualité de l'air (AQI, CO₂, PM2.5, PM10, COV) associées manuellement.
+- **Règles d'alerte/recommandation visuelles et purement d'affichage** — construisez vos propres recommandations à conditions multiples (par exemple « Ouvrez les fenêtres ») à partir de n'importe quelles entités numériques, affichées en évidence en haut de la zone d'informations. Elles sont purement visuelles et évaluées uniquement pendant que la carte est affichée ; la carte n'appelle jamais de service Home Assistant et ne déclenche jamais de notification.
 - Abonnement en direct aux prévisions via l'API WebSocket moderne `weather/subscribe_forecast` (journalières et horaires), avec gestion explicite des cas où une intégration météo ne prend pas en charge un type de prévision donné.
 - Respecte le réglage système `prefers-reduced-motion`, met le rendu en pause lorsque la carte n'est plus visible à l'écran ou que l'onglet du navigateur est masqué, et plafonne la densité de pixels de l'appareil pour maîtriser le coût GPU/CPU.
 - Contrôles de qualité et d'intensité d'animation pour que les tablettes murales peu puissantes et les écrans Raspberry Pi restent fluides.
@@ -84,10 +91,22 @@ HACS installe le fichier unique `dist/immersive-weather-dashboard.js` et enregis
 2. Téléversez le fichier dans `config/www/` (par exemple `config/www/maison.png`), afin qu'il soit accessible via `/local/maison.png`, ou hébergez-le sur une URL HTTPS que vous contrôlez.
 3. Ajoutez la carte à un tableau de bord, ouvrez l'éditeur de carte, et dans l'onglet **Image et scène**, collez le chemin de l'image (`/local/maison.png`) dans **URL de l'image de la maison**.
 4. Choisissez votre **entité météo** dans l'onglet **Source de données**, ou laissez le champ vide pour laisser la carte détecter automatiquement la meilleure entité.
-5. Ajustez l'**Apparence** (opacité/flou/rayon des panneaux, couleurs d'accent/texte, hauteur minimale, densité) pour correspondre à votre thème et à votre écran.
+5. Ajustez l'**Apparence** (opacité/flou/rayon des panneaux, couleurs d'accent/texte, hauteur minimale de la scène, ratio d'aspect de la scène, densité) pour correspondre à votre thème et à votre écran — ces réglages ne dimensionnent désormais que le **viewport de la scène**, pas toute la carte (voir [Mise en page](#mise-en-page--scène-et-zone-dinformations)).
 6. Activez/désactivez les **Prévisions** et choisissez le nombre d'éléments horaires/journaliers à afficher.
-7. Ouvrez **Indicateurs météo** pour réordonner, masquer, relabelliser, recolorer ou remapper manuellement chacun des seize indicateurs pris en charge.
-8. Cliquez éventuellement sur **Configuration automatique** une fois satisfait des détections automatiques, pour les figer dans la configuration enregistrée (voir [Détection automatique](#algorithme-de-détection-automatique-et-remplacements-manuels)).
+7. Ouvrez **Indicateurs météo** pour réordonner, masquer, relabelliser ou recolorer chacun des dix-sept indicateurs pris en charge (dont la nouvelle **température extérieure**).
+8. Ouvrez **Association des entités** pour voir, pour chaque indicateur, l'entité ou l'attribut météo exactement résolu par la carte, et pour saisir un remplacement manuel — c'est ici que vous connectez votre propre station météo extérieure (par exemple un ESP32) à la place de votre fournisseur météo (voir [Onglet Association des entités](#onglet-association-des-entités-et-remplacements-de-la-station-extérieure-ex-station-esp32)).
+9. Ouvrez **Environnement** pour ajouter autant de zones intérieures/extérieures que vous le souhaitez (chambre, salon, garage…) et associer manuellement leurs entités de température/humidité/qualité de l'air.
+10. Ouvrez **Alertes** pour créer vos propres règles de recommandation visuelle (par exemple « Ouvrez les fenêtres ») à partir de n'importe quelles entités numériques (voir [Règles d'alerte visuelles](#règles-dalerte--recommandation-visuelle)).
+11. Cliquez éventuellement sur **Configuration automatique** une fois satisfait des détections automatiques, pour les figer dans la configuration enregistrée (voir [Détection automatique](#algorithme-de-détection-automatique-et-remplacements-manuels)).
+
+## Mise en page : scène et zone d'informations
+
+Depuis la v1.0.1, la carte est divisée en deux zones clairement séparées, empilées verticalement dans le flux normal du document :
+
+1. **La scène** — un viewport à hauteur fixe en haut de la carte, ne contenant que les canevas animés de ciel/météo, votre photo de maison, et une petite surimpression de titre/résumé des conditions actuelles. `Apparence → Hauteur minimale` et `Apparence → Ratio d'aspect` dimensionnent **uniquement ce viewport**. La scène ne s'agrandit jamais pour accueillir d'autre contenu et rien d'autre n'est dessiné par-dessus, votre photo de maison et l'animation restent donc parfaitement visibles.
+2. **La zone d'informations** — une section en flux normal sous la scène, contenant dans l'ordre : les recommandations d'alerte actives, les indicateurs de la station extérieure, les cartes de zones environnementales, puis les prévisions. Cette zone n'a **aucune hauteur forcée ni découpage** : la carte s'agrandit naturellement selon la quantité d'informations configurée, et la vue Sections de Home Assistant est informée de respecter cette hauteur naturelle (plus de minimum forcé de 8 lignes). Les lignes de prévisions peuvent défiler horizontalement sur les petits écrans, mais le reste de la zone d'informations n'est jamais masqué ni tronqué.
+
+Ceci remplace directement le comportement de la v1.0, où chaque panneau était positionné en absolu par-dessus la scène (recouvrant la majeure partie de la maison/du ciel) à l'intérieur d'un élément `.scene` à hauteur limitée. Si vous mettez à jour depuis la v1.0, attendez-vous à ce que la carte paraisse différente immédiatement après la mise à jour — plus haute globalement, mais avec une scène dégagée et des informations parfaitement lisibles en dessous — voir [Migration et compatibilité de la configuration](#migration-et-compatibilité-de-la-configuration).
 
 ## Comment fonctionne la superposition d'images
 
@@ -106,10 +125,13 @@ Tout ce qui suit est configurable depuis l'éditeur graphique. Aucune édition Y
 | Onglet de l'éditeur | Options |
 | --- | --- |
 | Source de données | Titre de la carte, entité météo (ou détection automatique) |
+| Association des entités | Pour chaque indicateur de la station extérieure : type de source résolu, identifiant exact de l'entité résolue (ou attribut météo), remplacement manuel recherchable, et un contrôle pour effacer le remplacement |
 | Image et scène | URL de l'image de la maison, mode jour/nuit (auto/jour/nuit), animation activée/désactivée, qualité d'animation (faible/moyenne/élevée), intensité d'animation (0–2) |
-| Apparence | Opacité des panneaux, flou des panneaux, rayon des coins des panneaux, couleur d'accent, couleur du texte, hauteur minimale de la carte, ratio d'aspect, densité (confortable/compacte) |
+| Apparence | Opacité des panneaux, flou des panneaux, rayon des coins des panneaux, couleur d'accent, couleur du texte, hauteur minimale de la scène, ratio d'aspect de la scène, densité (confortable/compacte) |
 | Prévisions | Afficher/masquer les prévisions horaires, afficher/masquer les prévisions journalières, nombre d'éléments horaires, nombre d'éléments journaliers |
-| Indicateurs météo | Par indicateur : visible, libellé personnalisé, couleur personnalisée, icône personnalisée, entité de remplacement manuelle, et un indicateur de « source » en lecture seule (manuelle / attribut météo / capteur / non disponible) |
+| Indicateurs météo | Par indicateur : visible, libellé personnalisé, couleur personnalisée, icône personnalisée, et un indicateur de « source » en lecture seule (manuelle / attribut météo / capteur / non disponible) — les remplacements manuels vivent désormais dans l'onglet **Association des entités** |
+| Environnement | Ajouter/supprimer/réordonner un nombre illimité de zones ; par zone : nom, type intérieur/extérieur, visibilité, association manuelle d'entités pour température, humidité, AQI, CO₂, PM2.5, PM10 et COV |
+| Alertes | Ajouter/supprimer des règles de recommandation visuelle ; par règle : nom, message, sévérité, logique tout/au moins un, bascule activé/désactivé, et une ou plusieurs conditions numériques (entité, opérateur, seuil(s)) |
 
 Deux actions dédiées sont toujours disponibles :
 
@@ -118,11 +140,11 @@ Deux actions dédiées sont toujours disponibles :
 
 ## Algorithme de détection automatique et remplacements manuels
 
-Pour chacun des seize indicateurs pris en charge, la carte résout une valeur selon cet ordre de priorité strict :
+Pour chacun des dix-sept indicateurs pris en charge, la carte résout une valeur selon cet ordre de priorité strict :
 
-1. **Remplacement manuel** — l'entité que vous avez explicitement choisie pour cet indicateur dans l'éditeur. Si elle existe mais est `unavailable`/`unknown`, l'indicateur est affiché comme non disponible plutôt que de basculer silencieusement vers une autre source (les erreurs de configuration restent ainsi visibles).
-2. **Attribut de l'entité météo** — si l'entité météo sélectionnée expose un attribut correspondant (par exemple `humidity`, `pressure`, `wind_speed`, `wind_bearing`, `wind_gust_speed`, `uv_index`, `visibility`, `dew_point`, `cloud_coverage`, `ozone`, `apparent_temperature`), il est utilisé directement.
-3. **Capteur le mieux noté** — la carte note chaque entité `sensor.*` (et `air_quality.*` pour la qualité de l'air) par rapport à l'indicateur : `+10` pour une `device_class` correspondante, `+5` pour un mot-clé correspondant dans l'identifiant de l'entité, `+3` pour un mot-clé correspondant dans le nom convivial. Les indicateurs dont la classe est ambiguë (par exemple le point de rosée face à une température quelconque, les rafales face au vent moyen ou le lever du soleil face à n'importe quel horodatage) exigent aussi un mot-clé sémantique. Les entités `unavailable`/`unknown`, appartenant à un domaine non autorisé ou ne passant pas ce garde-fou sont rejetées afin d'éviter les associations accidentelles. L'entité la mieux notée l'emporte ; en cas d'égalité, l'ordre alphabétique de l'identifiant tranche, pour rester déterministe.
+1. **Remplacement manuel** — l'entité que vous avez explicitement choisie pour cet indicateur (dans l'onglet **Association des entités**). Si elle existe mais est `unavailable`/`unknown`, l'indicateur est affiché comme non disponible plutôt que de basculer silencieusement vers une autre source ; si l'identifiant saisi n'existe pas du tout, l'éditeur affiche une notification de validation plutôt que de l'ignorer silencieusement.
+2. **Attribut de l'entité météo** — si l'entité météo sélectionnée expose un attribut correspondant (par exemple `temperature`, `humidity`, `pressure`, `wind_speed`, `wind_bearing`, `wind_gust_speed`, `uv_index`, `visibility`, `dew_point`, `cloud_coverage`, `ozone`, `apparent_temperature`), il est utilisé directement.
+3. **Capteur le mieux noté** — la carte note chaque entité `sensor.*` (et `air_quality.*` pour la qualité de l'air) par rapport à l'indicateur : `+10` pour une `device_class` correspondante, `+5` pour un mot-clé correspondant dans l'identifiant de l'entité, `+3` pour un mot-clé correspondant dans le nom convivial. **Une entité déclarant une `device_class` qui ne fait pas partie des classes acceptées par l'indicateur est rejetée d'emblée**, même si son identifiant ou son nom convivial contient un mot-clé correspondant — ceci empêche spécifiquement, par exemple, un capteur de « puissance apparente » (`device_class: apparent_power`, exprimé en VA) d'être choisi pour le « ressenti » simplement parce que les deux mentionnent « apparent ». Les indicateurs dont la classe est ambiguë (par exemple le point de rosée face à une température quelconque, les rafales face au vent moyen ou le lever du soleil face à n'importe quel horodatage) exigent aussi un mot-clé sémantique. Les entités `unavailable`/`unknown`, appartenant à un domaine non autorisé ou ne passant pas ces garde-fous sont rejetées afin d'éviter les associations accidentelles. L'entité la mieux notée l'emporte ; en cas d'égalité, l'ordre alphabétique de l'identifiant tranche, pour rester déterministe.
 4. **Entité `sun.sun`** — utilisée uniquement pour le lever/coucher du soleil, via `next_rising`/`next_setting`, si aucun capteur n'a été trouvé.
 5. **Non disponible** — si rien ne convient, l'indicateur est simplement omis de la station plutôt que d'afficher un zéro trompeur.
 
@@ -130,12 +152,35 @@ L'entité météo elle-même est sélectionnée de façon similaire : votre enti
 
 Cet algorithme s'exécute en direct à chaque rendu de la carte, il s'adapte donc naturellement si vous ajoutez, renommez ou remplacez des entités — sauf si vous avez explicitement utilisé **Configuration automatique**, qui fige les détections actuelles dans la configuration enregistrée.
 
+## Onglet Association des entités et remplacements de la station extérieure (ex. station ESP32)
+
+L'onglet d'édition **Association des entités** est l'endroit unique et évident pour voir et contrôler exactement quelle entité alimente chaque indicateur de la station extérieure. Pour chaque indicateur, il affiche :
+
+- le libellé de l'indicateur ;
+- le **type de source résolu** (remplacement manuel / attribut météo / capteur / non disponible) ;
+- l'**identifiant exact de l'entité actuellement résolue** (ou le nom de l'attribut météo, quand c'est la source) ;
+- un champ de texte avec une liste de suggestions recherchable et modifiable (`<datalist>`) d'entités compatibles — affichant les noms conviviaux et les unités quand ils sont disponibles — pour choisir une suggestion ou saisir n'importe quel identifiant d'entité à la main ;
+- un bouton **Effacer le remplacement** pour retirer une association manuelle et revenir à la détection automatique.
+
+Un remplacement manuel a toujours la priorité sur la détection automatique. Si vous saisissez un identifiant d'entité qui n'existe pas dans votre instance Home Assistant, l'onglet affiche une notification de validation au lieu d'ignorer silencieusement votre saisie.
+
+**Exemple : remplacer température/humidité/pression extérieures par une véritable station météo ESP32**
+
+1. Assurez-vous que les relevés de votre station ESP32 sont disponibles comme entités capteur Home Assistant (par exemple via ESPHome, MQTT ou Tasmota), par exemple `sensor.esp32_temperature_exterieure`, `sensor.esp32_humidite_exterieure`, `sensor.esp32_pression_exterieure`.
+2. Ouvrez l'éditeur de carte → **Association des entités**.
+3. Repérez **Température extérieure**, saisissez ou choisissez `sensor.esp32_temperature_exterieure` dans son champ de remplacement, puis cliquez/tabulez ailleurs pour confirmer — la ligne se met à jour pour afficher cette source résolue.
+4. Répétez l'opération pour **Humidité extérieure** et **Pression** avec vos capteurs d'humidité/pression ESP32.
+5. Le résumé des conditions actuelles en haut de la scène et l'indicateur de la station extérieure reflètent immédiatement les relevés de votre ESP32 au lieu des données de votre fournisseur météo ; si votre capteur ESP32 devient indisponible, la carte revient automatiquement à la valeur du fournisseur météo.
+
+Les champs de remplacement d'entité se mettent à jour au changement/à la perte de focus, pas à chaque frappe, afin que vous puissiez saisir un identifiant d'entité complet sans que la carte ne gêne votre saisie.
+
 ## Tableau de référence des indicateurs / entités
 
 | Indicateur | Attribut météo utilisé | `device_class` du capteur | Mots-clés typiques |
 | --- | --- | --- | --- |
+| Température extérieure | `temperature` | `temperature` | outdoor, exterieur, dehors, temperature |
 | Ressenti (température apparente) | `apparent_temperature` | `temperature` | feels_like, apparent, ressenti |
-| Humidité | `humidity` | `humidity` | humidity, humidite |
+| Humidité extérieure | `humidity` | `humidity` | humidity, humidite |
 | Pression | `pressure` | `pressure`, `atmospheric_pressure` | pressure, pression |
 | Vitesse du vent | `wind_speed` | `wind_speed` | wind_speed, vitesse_vent |
 | Direction du vent | `wind_bearing` | — | wind_bearing, wind_direction |
@@ -151,30 +196,82 @@ Cet algorithme s'exécute en direct à chaque rendu de la carte, il s'adapte don
 | Lever du soleil | `sun.sun` `next_rising` (repli) | `timestamp` | sunrise, lever_soleil |
 | Coucher du soleil | `sun.sun` `next_setting` (repli) | `timestamp` | sunset, coucher_soleil |
 
-## Prévisions
+## Zones environnementales (pièces intérieures/extérieures illimitées et qualité de l'air)
+
+Au-delà de la seule station extérieure, l'onglet **Environnement** vous permet de définir **un nombre illimité de zones environnementales** — par exemple « Chambre », « Salon », « Garage », « Serre » ou un second emplacement extérieur. Chaque zone est entièrement configurée manuellement (aucune détection automatique n'est tentée pour l'attribution des pièces, car vous seul savez quel capteur appartient à quelle pièce) :
+
+- un nom stable que vous choisissez ;
+- un type : **intérieur** ou **extérieur** ;
+- une bascule de visibilité (masquer une zone du rendu de la carte sans supprimer sa configuration) ;
+- des associations d'entités manuelles, chacune avec un champ recherchable/modifiable, pour : **température**, **humidité**, **AQI**, **CO₂**, **PM2.5**, **PM10** et **COV** — n'associez que celles pertinentes pour cette zone, les autres sont simplement omises.
+
+Les zones visibles s'affichent sous forme de cartes réactives sous la station extérieure, chacune montrant le nom et le type de la zone ainsi que chaque valeur configurée avec un libellé, une icône et une unité localisés. Si une entité configurée est manquante ou indisponible, sa ligne affiche visiblement un tiret cadratin (`—`) et une notification de validation, plutôt que de disparaître silencieusement — une mauvaise configuration reste ainsi toujours visible, jamais masquée.
+
+C'est ainsi que la carte prend en charge, par exemple, le suivi simultané du CO₂/AQI intérieur d'une chambre et de l'AQI/PM2.5 extérieur, ou la comparaison de la température/humidité entre plusieurs pièces.
+
+## Règles d'alerte / recommandation visuelle
+
+L'onglet **Alertes** vous permet de créer vos propres **recommandations visuelles, purement d'affichage**, évaluées en direct à partir de n'importe quelles entités numériques de votre système — par exemple un rappel pour ouvrir les fenêtres lorsque la qualité de l'air intérieur en bénéficierait. Chaque règle comporte :
+
+- un nom et un message de recommandation affiché lorsque la règle est active ;
+- une sévérité : **info**, **avertissement** ou **critique** (chacune rendue avec une couleur/icône distincte) ;
+- une logique : **toutes** les conditions doivent être remplies, ou **au moins une** d'entre elles ;
+- une bascule activée/désactivée ;
+- une ou plusieurs conditions numériques, chacune avec un identifiant d'entité, un opérateur (`>`, `≥`, `<`, `≤`, `=`, **entre**, **en dehors**) et une ou deux valeurs de seuil.
+
+**Exemple : « Ouvrir les fenêtres »**
+
+| Condition | Entité | Opérateur | Seuil(s) |
+| --- | --- | --- | --- |
+| Le CO₂ intérieur est élevé | `sensor.co2_chambre` | supérieur à (`gt`) | 1000 ppm |
+| La qualité de l'air extérieur est bonne | `sensor.aqi_exterieur` | inférieur à (`lt`) | 50 |
+| La température extérieure est agréable | `sensor.esp32_temperature_exterieure` | entre | 12 et 28 |
+
+Avec la logique réglée sur **toutes**, cette règle ne devient active — et n'affiche une recommandation en évidence en haut de la zone d'informations — que lorsque ces trois conditions sont simultanément vraies. Cet exemple est **documenté ici uniquement** ; la carte ne l'active pas par défaut, car les identifiants d'entités sont propres à chaque installation. Construisez vos propres règles à partir de vos propres entités dans l'onglet **Alertes**.
+
+**Limites importantes, par conception :**
+
+- Les alertes sont des **recommandations purement visuelles** rendues à l'intérieur de la carte. Elles n'appellent jamais un service Home Assistant, ne déclenchent jamais de notification et n'exécutent jamais d'automatisation.
+- Une règle n'est évaluée que **pendant que cette carte Lovelace est réellement affichée à l'écran** (tableau de bord ouvert, onglet visible). Une carte Lovelace n'a aucun processus en arrière-plan, elle ne peut donc jamais vous prévenir lorsqu'elle n'est pas affichée — utilisez une véritable automatisation/notification Home Assistant si vous avez besoin d'être alerté ailleurs que sur le tableau de bord.
+- Une règle référençant une entité manquante, indisponible ou non numérique, ou sans condition, ou désactivée, est toujours considérée comme inactive plutôt que de provoquer une erreur ou d'afficher une donnée périmée.
+- **Entre** est inclusif des deux seuils ; **en dehors** est strictement exclusif de la plage entre eux.
 
 Les prévisions n'étant plus exposées comme attributs d'état des entités météo dans les versions récentes de Home Assistant, la carte s'abonne aux mises à jour de prévisions en direct via la commande WebSocket `weather/subscribe_forecast`, séparément pour les types `daily` et `hourly`. Si votre intégration météo ne prend pas en charge un type de prévision donné, la tentative d'abonnement est gérée explicitement (pas silencieusement ignorée) et la section correspondante est simplement masquée — vous ne verrez pas de chargement bloqué indéfiniment. Les abonnements sont automatiquement renouvelés si vous changez d'entité météo ou de réglages de prévisions, et proprement résiliés lorsque la carte est retirée ou quitte le tableau de bord.
 
 ## Réactivité, performance, accessibilité, confidentialité
 
-- **Réactivité** — la scène remplit son conteneur et s'adapte aux smartphones, tablettes, cartes de bureau et écrans muraux ; la densité des panneaux et la taille des polices s'ajustent sur les petites largeurs.
-- **Performance** — la qualité et l'intensité de l'animation sont configurables ; la densité de pixels de l'appareil utilisée pour les canevas est plafonnée à 2 pour éviter une charge GPU/CPU excessive sur les écrans haute densité ; le rendu est automatiquement mis en pause lorsque la carte défile hors de l'écran (`IntersectionObserver`) ou que l'onglet du navigateur est masqué (`visibilitychange`).
+- **Réactivité** — le viewport de la scène remplit son conteneur et s'adapte aux smartphones, tablettes, cartes de bureau et écrans muraux ; sur les petits écrans/mobiles, toute la scène est affichée en premier, suivie de l'intégralité de la zone d'informations — rien n'est masqué, seules les lignes de prévisions peuvent défiler horizontalement. La densité des panneaux et la taille des polices s'ajustent sur les petites largeurs.
+- **Performance** — la qualité et l'intensité de l'animation sont configurables ; la densité de pixels de l'appareil utilisée pour les canevas est plafonnée à 2 pour éviter une charge GPU/CPU excessive sur les écrans haute densité ; le rendu est automatiquement mis en pause lorsque la carte défile hors de l'écran (`IntersectionObserver`) ou que l'onglet du navigateur est masqué (`visibilitychange`). Le `ResizeObserver` du moteur de rendu reste attaché au viewport de la scène, si bien que redimensionner/reconnecter la carte (par exemple en changeant de tableau de bord) conserve une animation correctement dimensionnée.
 - **Accessibilité** — le moteur de rendu respecte le réglage système `prefers-reduced-motion` : une seule image statique est dessinée au lieu d'une boucle d'animation continue.
-- **Confidentialité** — la carte n'effectue **aucun appel réseau propre** au moment de l'exécution, en dehors de ce que votre frontend Home Assistant fait déjà (charger l'image de maison configurée et dialoguer avec votre propre instance Home Assistant). Aucune télémétrie, aucun outil d'analyse, aucun service tiers n'intervient dans le rendu de la scène météo.
+- **Confidentialité** — la carte n'effectue **aucun appel réseau propre** au moment de l'exécution, en dehors de ce que votre frontend Home Assistant fait déjà (charger l'image de maison configurée et dialoguer avec votre propre instance Home Assistant). Aucune télémétrie, aucun outil d'analyse, aucun service tiers n'intervient dans le rendu de la scène météo. Les règles d'alerte sont évaluées **entièrement en local dans le navigateur**, uniquement pendant que la carte est affichée — rien n'est envoyé nulle part et aucun service/notification Home Assistant n'est jamais déclenché par elles.
 
 ## Dépannage
 
 - **La carte n'apparaît pas dans le sélecteur** — vérifiez que la ressource Lovelace a bien été enregistrée (HACS le fait automatiquement ; pour une installation manuelle, vérifiez **Paramètres → Tableaux de bord → Ressources**), puis rechargez complètement l'onglet du navigateur (Ctrl/Cmd+Maj+R) pour contourner le cache.
 - **« Aucune entité météo trouvée »** — choisissez-en une explicitement dans l'éditeur, ou assurez-vous qu'au moins une entité `weather.*` est disponible (ni `unavailable`, ni `unknown`).
-- **Un indicateur n'affiche rien** — vérifiez l'indicateur « source » dans l'onglet **Indicateurs météo** : il indique si la valeur provient d'un remplacement manuel, d'un attribut météo ou d'un capteur, et si rien n'a pu être trouvé.
+- **Un indicateur n'affiche rien** — ouvrez l'onglet **Association des entités** : il indique, pour chaque indicateur, l'entité/attribut exactement résolu et la source de résolution (remplacement manuel / attribut météo / capteur / non disponible).
+- **Un indicateur s'est associé automatiquement à la mauvaise entité** (par exemple un capteur de puissance/énergie choisi pour un indicateur de type température car son nom contient un mot-clé correspondant) — cette catégorie de bug est désormais spécifiquement bloquée : une entité dont la `device_class` est définie et ne correspond pas aux classes acceptées par l'indicateur est toujours rejetée, quels que soient les mots-clés correspondants dans son identifiant ou son nom convivial. Si vous voyez encore une association automatique incorrecte, ouvrez **Association des entités**, vérifiez l'identifiant d'entité affiché comme « résolu », et définissez-y un remplacement manuel explicite — les remplacements manuels l'emportent toujours sur la détection automatique.
+- **Une ligne de zone environnementale affiche un tiret cadratin (—)** — l'entité associée à cette ligne dans l'onglet **Environnement** est manquante ou indisponible ; vérifiez la notification de validation de la zone et corrigez l'identifiant d'entité ou le capteur lui-même.
+- **Une alerte n'apparaît jamais** — vérifiez que la règle est activée, qu'elle possède au moins une condition, et que chaque entité référencée est disponible et rapporte un état numérique ; pour la logique **toutes**, chaque condition doit être vraie simultanément, pour la logique **au moins une**, une seule suffit. N'oubliez pas que les alertes ne sont évaluées que pendant que la carte est réellement affichée à l'écran.
 - **Les prévisions n'apparaissent pas** — votre intégration météo ne prend peut-être pas en charge le type de prévision `hourly` ou `daily` ; ceci est signalé en interne comme « non pris en charge » plutôt que comme une erreur, et la ligne de prévision correspondante est masquée.
-- **Ancienne configuration après une mise à jour** — les configurations sont fusionnées avec les valeurs par défaut actuelles au chargement, donc les configurations anciennes ou partielles continuent de fonctionner ; si un champ semble incorrect, ouvrez l'éditeur, il affichera les valeurs effectives.
+- **Ancienne configuration après une mise à jour** — les configurations sont fusionnées avec les valeurs par défaut actuelles au chargement, donc les configurations anciennes ou partielles continuent de fonctionner ; si un champ semble incorrect, ouvrez l'éditeur, il affichera les valeurs effectives. Voir [Migration et compatibilité de la configuration](#migration-et-compatibilité-de-la-configuration).
 - **Scène vide/noire** — vérifiez que l'URL de votre image est accessible (ouvrez-la directement dans un onglet du navigateur) ; si l'URL est incorrecte, l'animation du ciel continue de s'afficher, mais sans votre photo de maison.
+- **La carte paraît plus haute qu'avant après la mise à jour** — c'est normal : depuis la v1.0.1, la zone d'informations s'agrandit naturellement sous la scène au lieu d'être découpée par-dessus. Voir [Mise en page](#mise-en-page--scène-et-zone-dinformations).
 
 ## Mise à jour et suppression de la carte
 
 - **Mise à jour** — HACS vous informera des nouvelles versions ; cliquez sur « Mettre à jour » puis rechargez le frontend ensuite.
 - **Suppression** — retirez la carte de vos tableaux de bord, puis supprimez le dépôt de HACS (ou supprimez la ressource et le fichier pour une installation manuelle). Cette carte ne crée aucune entité, automatisation ni service en arrière-plan persistant, la suppression est donc immédiate et propre.
+
+## Migration et compatibilité de la configuration
+
+La mise à jour depuis la v1.0.0 est **sûre et ne nécessite aucune modification manuelle de configuration** :
+
+- Les configurations existantes continuent de fonctionner telles quelles ; chaque nouveau champ (`environment_zones`, `alerts`, l'indicateur de température extérieure, l'association manuelle par indicateur) est fusionné avec des valeurs par défaut sûres (`[]` pour les zones/alertes) s'il est absent de votre configuration/YAML enregistrée.
+- L'indicateur `humidity` existant et son remplacement manuel sont préservés sans changement — il est désormais libellé « Humidité extérieure » dans l'interface, mais la clé de configuration et l'association d'entité sous-jacentes sont inchangées.
+- Visuellement, la carte paraîtra différente immédiatement après la mise à jour : la scène devient un viewport plus petit et dégagé en haut, et tous les indicateurs/prévisions se déplacent dans une zone d'informations en flux normal en dessous, ce qui peut rendre la carte globalement plus haute. `Apparence → Hauteur minimale`/`Ratio d'aspect` ne dimensionnent désormais que la scène ; si votre carte paraît trop courte ou trop haute, revoyez ces deux réglages.
+- Aucune association d'entité n'est perdue : tous les remplacements manuels que vous aviez configurés pour les indicateurs existants continuent de fonctionner et se modifient désormais depuis le nouvel onglet **Association des entités** plutôt que depuis les anciens menus déroulants intégrés à l'onglet **Indicateurs météo**.
+- `environment_zones` et `alerts` démarrent vides ; rien n'est préconfiguré automatiquement à votre place, car l'attribution des zones/pièces et les seuils d'alerte sont par nature propres à votre logement et toujours configurés manuellement.
 
 ## Développement
 
@@ -212,12 +309,18 @@ Le workflow de release compile et joint exactement le fichier attendu par `hacs.
 
 **Quelles intégrations météo sont prises en charge ?** Toute intégration fournissant une entité `weather.*` standard. La prise en charge des prévisions dépend du fait que cette intégration implémente les abonnements WebSocket de prévisions `hourly`/`daily`.
 
+**Les règles d'alerte vont-elles m'envoyer une notification si je ne regarde pas le tableau de bord ?** Non. Les alertes sont des recommandations d'affichage purement visuelles, rendues à l'intérieur de la carte et évaluées uniquement pendant qu'elle est affichée ; une carte Lovelace ne peut pas s'exécuter en arrière-plan, elle n'appelle donc jamais de service ou de notification Home Assistant. Utilisez une automatisation Home Assistant si vous devez être notifié ailleurs.
+
+**Puis-je utiliser ma propre station météo (par exemple ESP32) au lieu des données du fournisseur ?** Oui — associez ses entités capteur aux indicateurs extérieurs (température, humidité, pression…) dans l'onglet **Association des entités** ; les remplacements manuels ont toujours la priorité sur le fournisseur météo.
+
 ## Limites
 
 - Le moteur de rendu est **procédural et stylisé**, pas une simulation météo photoréaliste ni un service vidéo/photo météo sous licence ; ne vous attendez pas à un réalisme cinématographique.
 - Les visuels de précipitations, de nuages et d'éclairs sont des approximations pilotées par la condition rapportée par l'entité météo, pas des simulations physiquement exactes.
 - La qualité de l'effet de « ciel transparent » dépend entièrement de la qualité du détourage alpha de votre image.
 - Des images de maison très volumineuses ou non optimisées peuvent ralentir le chargement initial de la carte ; voir les recommandations de résolution ci-dessous.
+- Les associations d'entités des zones environnementales et des alertes sont **intentionnellement manuelles** — la carte ne tente pas de deviner quel capteur appartient à quelle pièce, cette attribution étant par nature propre à votre logement.
+- Les règles d'alerte sont **purement d'affichage** : elles ne déclenchent jamais de notification, de service ou d'automatisation Home Assistant, et ne sont évaluées que pendant que la carte est réellement affichée à l'écran.
 
 ## Prompt IA pour préparer votre photo de maison
 

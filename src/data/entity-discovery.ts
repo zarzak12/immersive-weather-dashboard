@@ -71,8 +71,16 @@ export function scoreSensorCandidate(entity: HassEntity, definition: (typeof MET
 
   let score = 0;
   const deviceClass = entity.attributes.device_class;
-  if (deviceClass && definition.deviceClasses.includes(deviceClass)) {
-    score += 10;
+  if (deviceClass) {
+    if (definition.deviceClasses.length > 0 && !definition.deviceClasses.includes(deviceClass)) {
+      // The entity explicitly declares an incompatible device_class (e.g. `apparent_power`
+      // for an `apparent_temperature` metric): reject it outright, even if a keyword like
+      // "apparent" happens to appear in its id/friendly name.
+      return Number.NEGATIVE_INFINITY;
+    }
+    if (definition.deviceClasses.includes(deviceClass)) {
+      score += 10;
+    }
   }
 
   const entityId = entity.entity_id.toLowerCase();

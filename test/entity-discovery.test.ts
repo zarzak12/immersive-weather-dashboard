@@ -87,10 +87,20 @@ describe('scoreSensorCandidate', () => {
     expect(scoreSensorCandidate(strong, definition)).toBeGreaterThan(scoreSensorCandidate(weak, definition));
   });
 
-  it('does not cross-match unrelated device classes to a metric', () => {
+  it('rejects an entity that declares an incompatible device_class instead of merely skipping the class bonus', () => {
     const definition = METRIC_CATALOG.humidity;
     const candidate = entity('sensor.random', '10', { device_class: 'temperature' });
-    expect(scoreSensorCandidate(candidate, definition)).toBe(0);
+    expect(scoreSensorCandidate(candidate, definition)).toBe(Number.NEGATIVE_INFINITY);
+  });
+
+  it('rejects an apparent_power sensor for the apparent_temperature metric even though "apparent" matches its keywords (570 VA regression)', () => {
+    const definition = METRIC_CATALOG.apparent_temperature;
+    const candidate = entity('sensor.apparent_power', '570', {
+      device_class: 'apparent_power',
+      unit_of_measurement: 'VA',
+      friendly_name: 'Ressenti (Apparent Power)'
+    });
+    expect(scoreSensorCandidate(candidate, definition)).toBe(Number.NEGATIVE_INFINITY);
   });
 
   it('requires a semantic keyword for ambiguous device classes', () => {
@@ -113,6 +123,20 @@ describe('findBestSensor', () => {
   it('returns undefined when nothing scores above zero', () => {
     const hass = makeHass([entity('sensor.random', '5')]);
     expect(findBestSensor(hass, 'humidity')).toBeUndefined();
+  });
+
+  it('prefers a genuinely outdoor temperature sensor over an indoor temperature sensor', () => {
+    const hass = makeHass([
+      entity('sensor.living_room_temperature', '21', {
+        device_class: 'temperature',
+        friendly_name: 'Living Room Temperature'
+      }),
+      entity('sensor.esp32_outdoor_temp', '17', {
+        device_class: 'temperature',
+        friendly_name: 'Garden Sensor'
+      })
+    ]);
+    expect(findBestSensor(hass, 'outdoor_temperature')?.entity_id).toBe('sensor.esp32_outdoor_temp');
   });
 });
 

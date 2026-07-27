@@ -2,6 +2,8 @@ import { LitElement, PropertyValues, css, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import type {
+  EnvironmentZoneConfig,
+  EnvironmentZoneEntityKey,
   ForecastAttribute,
   HassEntity,
   HomeAssistant,
@@ -10,10 +12,12 @@ import type {
   MetricKey,
   PartialImmersiveWeatherCardConfig
 } from './types';
+import { ENVIRONMENT_ZONE_ENTITY_KEYS } from './types';
 import { CARD_TYPE, mergeConfig } from './config/defaults';
 import { METRIC_CATALOG } from './config/metrics';
 import { validateConfig } from './config/validate';
-import { pickWeatherEntity, resolveAllMetrics } from './data/entity-discovery';
+import { evaluateAlerts, type EvaluatedAlert } from './data/alerts';
+import { isUnavailable, pickWeatherEntity, resolveAllMetrics, type ResolvedMetric } from './data/entity-discovery';
 import { subscribeForecast } from './data/forecast-subscribe';
 import {
   bearingToCompass,
@@ -45,6 +49,22 @@ const CONDITION_ICONS: Record<string, string> = {
   windy: 'mdi:weather-windy',
   'windy-variant': 'mdi:weather-windy-variant',
   exceptional: 'mdi:alert-circle-outline'
+};
+
+const ALERT_SEVERITY_ICON: Record<string, string> = {
+  info: 'mdi:information-outline',
+  warning: 'mdi:alert-outline',
+  critical: 'mdi:alert-octagon-outline'
+};
+
+const ZONE_ENTITY_ICON: Record<EnvironmentZoneEntityKey, string> = {
+  temperature: 'mdi:thermometer',
+  humidity: 'mdi:water-percent',
+  aqi: 'mdi:air-filter',
+  co2: 'mdi:molecule-co2',
+  pm2_5: 'mdi:blur',
+  pm10: 'mdi:blur-radial',
+  voc: 'mdi:flask-outline'
 };
 
 function conditionIcon(condition: string | undefined): string {
@@ -83,12 +103,33 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     this._config = mergeConfig(config as PartialImmersiveWeatherCardConfig);
   }
 
+  /**
+   * Rough row-count estimate for legacy masonry/grid dashboards. Home
+   * Assistant's modern "sections" view uses `getGridOptions` instead, which
+   * intentionally does not force a fixed number of rows (see below) so the
+   * card grows naturally with its content.
+   */
   getCardSize(): number {
-    return Math.max(4, Math.round((this._config?.appearance.min_height ?? 480) / 50));
+    if (!this._config) return 4;
+    let rows = Math.max(3, Math.round(this._config.appearance.min_height / 50));
+    rows += 1; // title + current condition overlay
+    if (this._config.alerts.some((rule) => rule.enabled)) rows += 1;
+    if (this._config.metrics.some((metric) => metric.visible)) rows += 2;
+    const visibleZones = this._config.environment_zones.filter((zone) => zone.visible).length;
+    if (visibleZones > 0) rows += Math.ceil(visibleZones / 2) * 2;
+    if (this._config.forecast.show_hourly) rows += 2;
+    if (this._config.forecast.show_daily) rows += 2;
+    return rows;
   }
 
-  getGridOptions(): { columns: number; rows: number; min_columns: number; min_rows: number } {
-    return { columns: 12, rows: 8, min_columns: 6, min_rows: 6 };
+  /**
+   * Only constrains the column span. Rows are intentionally left unset so
+   * Home Assistant's sections view sizes the card to its natural,
+   * information-driven height instead of clipping/stretching it to a fixed
+   * number of grid rows.
+   */
+  getGridOptions(): { columns: number; min_columns: number } {
+    return { columns: 12, min_columns: 6 };
   }
 
   static getConfigElement(): HTMLElement {
@@ -250,6 +291,7 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
 
   private _formatMetricValue(key: MetricKey, value: unknown, unit: string | undefined, language: string): string {
     switch (key) {
+      case 'outdoor_temperature':
       case 'apparent_temperature':
       case 'dew_point':
         return formatTemperature(value, this.hass, unit);
@@ -284,6 +326,27 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     }
   }
 
+  private _formatZoneValue(key: EnvironmentZoneEntityKey, entity: HassEntity): string {
+    const unit = entity.attributes.unit_of_measurement;
+    switch (key) {
+      case 'temperature':
+        return formatTemperature(entity.state, this.hass, unit);
+      case 'humidity':
+        return formatPercent(entity.state);
+      case 'aqi':
+        return formatNumber(entity.state, unit, 0);
+      case 'co2':
+        return formatNumber(entity.state, unit ?? 'ppm', 0);
+      case 'pm2_5':
+      case 'pm10':
+        return formatNumber(entity.state, unit ?? 'µg/m³', 1);
+      case 'voc':
+        return formatNumber(entity.state, unit, 1);
+      default:
+        return formatNumber(entity.state, unit);
+    }
+  }
+
   protected render() {
     if (!this._config) return nothing;
     const language = this.hass?.locale?.language ?? this.hass?.language ?? 'en';
@@ -291,57 +354,85 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     const weatherState = weatherEntityId ? this.hass?.states[weatherEntityId] : undefined;
     const issues = this.hass ? validateConfig(this._config, this.hass) : [];
     const appearance = this._config.appearance;
+    const resolvedMetrics = this.hass ? resolveAllMetrics(this.hass, this._config.entities, weatherEntityId) : undefined;
+    const activeAlerts = this.hass ? evaluateAlerts(this.hass, this._config.alerts).filter((alert) => alert.active) : [];
+    const hasOutdoorTemperature = resolvedMetrics?.outdoor_temperature.source !== 'none';
 
-    const sceneStyle = styleMap({
+    const rootStyle = styleMap({
       '--panel-opacity': String(appearance.panel_opacity),
       '--panel-blur': `${appearance.panel_blur}px`,
       '--panel-radius': `${appearance.panel_radius}px`,
       '--accent-color': appearance.accent_color,
-      '--text-color': appearance.text_color,
+      '--text-color': appearance.text_color
+    });
+    const sceneStyle = styleMap({
       minHeight: `${appearance.min_height}px`,
       aspectRatio: appearance.aspect_ratio || undefined
     });
 
     return html`
-      <ha-card>
-        <div class="scene density-${appearance.density}" style=${sceneStyle}>
+      <ha-card style=${rootStyle} class="density-${appearance.density}">
+        <div class="scene" style=${sceneStyle}>
           <canvas class="bg-canvas"></canvas>
           ${this._config.image_url ? html`<img class="house-image" src=${this._config.image_url} alt="" />` : nothing}
           <canvas class="fg-canvas"></canvas>
-          <div class="ui-layer">
+          <div class="scene-overlay">
             ${this._config.title ? html`<h1 class="title">${this._config.title}</h1>` : nothing}
-            ${!weatherEntityId
-              ? html`<div class="panel notice">${localize(language, 'card.no_weather_entity')}</div>`
-              : this._renderCurrent(weatherState, language)}
-            ${weatherEntityId ? this._renderMetrics(weatherEntityId, language) : nothing}
-            ${weatherEntityId ? this._renderForecast(language) : nothing}
-            ${issues.length
-              ? html`<div class="panel notice">
-                  ${issues.map((issue) => html`<div>${localize(language, issue.messageKey, issue.vars)}</div>`)}
-                </div>`
+            ${weatherEntityId || hasOutdoorTemperature
+              ? this._renderCurrent(weatherState, resolvedMetrics?.outdoor_temperature, language)
               : nothing}
           </div>
+        </div>
+        <div class="info">
+          ${!weatherEntityId ? html`<div class="panel notice">${localize(language, 'card.no_weather_entity')}</div>` : nothing}
+          ${activeAlerts.length ? this._renderAlerts(activeAlerts, language) : nothing}
+          ${this._renderMetrics(resolvedMetrics, language)}
+          ${this._renderZones(language)}
+          ${weatherEntityId ? this._renderForecast(language) : nothing}
+          ${issues.length
+            ? html`<div class="panel notice">
+                ${issues.map((issue) => html`<div>${localize(language, issue.messageKey, issue.vars)}</div>`)}
+              </div>`
+            : nothing}
         </div>
       </ha-card>
     `;
   }
 
-  private _renderCurrent(weatherState: HassEntity | undefined, language: string) {
+  private _renderCurrent(weatherState: HassEntity | undefined, outdoorTemperature: ResolvedMetric | undefined, language: string) {
     const condition = weatherState?.state;
-    const temperature = weatherState?.attributes.temperature;
-    const unit = weatherState?.attributes.temperature_unit as string | undefined;
+    const hasResolvedTemperature = outdoorTemperature && outdoorTemperature.source !== 'none';
+    const value = hasResolvedTemperature ? outdoorTemperature!.value : weatherState?.attributes.temperature;
+    const unit = hasResolvedTemperature ? outdoorTemperature!.unit : (weatherState?.attributes.temperature_unit as string | undefined);
     return html`
       <div class="panel current">
         <ha-icon icon=${conditionIcon(condition)}></ha-icon>
-        <div class="temperature">${formatTemperature(temperature, this.hass, unit)}</div>
+        <div class="temperature">${this._formatMetricValue('outdoor_temperature', value, unit, language)}</div>
         <div class="condition">${condition ? localize(language, `condition.${condition}`) : ''}</div>
       </div>
     `;
   }
 
-  private _renderMetrics(weatherEntityId: string, language: string) {
-    if (!this.hass || !this._config) return nothing;
-    const resolved = resolveAllMetrics(this.hass, this._config.entities, weatherEntityId);
+  private _renderAlerts(alerts: EvaluatedAlert[], language: string) {
+    return html`
+      <div class="alerts">
+        ${alerts.map(
+          (alert) => html`
+            <div class="alert alert-${alert.severity}">
+              <ha-icon icon=${ALERT_SEVERITY_ICON[alert.severity] ?? 'mdi:information-outline'}></ha-icon>
+              <div class="alert-body">
+                <div class="alert-name">${alert.name || localize(language, 'alerts.default_name')}</div>
+                ${alert.message ? html`<div class="alert-message">${alert.message}</div>` : nothing}
+              </div>
+            </div>
+          `
+        )}
+      </div>
+    `;
+  }
+
+  private _renderMetrics(resolved: Record<MetricKey, ResolvedMetric> | undefined, language: string) {
+    if (!resolved || !this._config) return nothing;
     const visible = [...this._config.metrics].filter((metric) => metric.visible).sort((a, b) => a.order - b.order);
     const items = visible
       .map((metric) => ({ metric, resolved: resolved[metric.key] }))
@@ -350,16 +441,60 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
 
     return html`
       <div class="panel metrics">
-        ${items.map(
-          ({ metric, resolved }) => html`
-            <div class="metric">
-              <ha-icon icon=${metric.icon || METRIC_CATALOG[metric.key].defaultIcon}
-                style=${metric.color ? `color:${metric.color}` : ''}></ha-icon>
-              <span class="metric-label">${metric.label || localize(language, `metrics.${metric.key}`)}</span>
-              <span class="metric-value">${this._formatMetricValue(metric.key, resolved.value, resolved.unit, language)}</span>
-            </div>
-          `
-        )}
+        <div class="panel-title">${localize(language, 'card.outdoor_station')}</div>
+        <div class="metrics-grid">
+          ${items.map(
+            ({ metric, resolved }) => html`
+              <div class="metric">
+                <ha-icon icon=${metric.icon || METRIC_CATALOG[metric.key].defaultIcon}
+                  style=${metric.color ? `color:${metric.color}` : ''}></ha-icon>
+                <span class="metric-label">${metric.label || localize(language, `metrics.${metric.key}`)}</span>
+                <span class="metric-value">${this._formatMetricValue(metric.key, resolved.value, resolved.unit, language)}</span>
+              </div>
+            `
+          )}
+        </div>
+      </div>
+    `;
+  }
+
+  private _renderZones(language: string) {
+    const zones = this._config.environment_zones.filter((zone) => zone.visible);
+    if (zones.length === 0) return nothing;
+    return html` <div class="zones-grid">${zones.map((zone) => this._renderZoneCard(zone, language))}</div> `;
+  }
+
+  private _renderZoneCard(zone: EnvironmentZoneConfig, language: string) {
+    const configuredKeys = ENVIRONMENT_ZONE_ENTITY_KEYS.filter((key) => zone.entities[key]);
+    return html`
+      <div class="panel zone-card">
+        <div class="zone-header">
+          <ha-icon icon=${zone.kind === 'outdoor' ? 'mdi:tree-outline' : 'mdi:home-outline'}></ha-icon>
+          <span class="zone-name">${zone.name || localize(language, `zone.kind_${zone.kind}`)}</span>
+          <span class="zone-kind">${localize(language, `zone.kind_${zone.kind}`)}</span>
+        </div>
+        ${configuredKeys.length === 0
+          ? html`<div class="zone-empty">${localize(language, 'zone.no_metrics')}</div>`
+          : configuredKeys.map((key) => this._renderZoneRow(zone, key, language))}
+      </div>
+    `;
+  }
+
+  private _renderZoneRow(zone: EnvironmentZoneConfig, key: EnvironmentZoneEntityKey, language: string) {
+    const entityId = zone.entities[key] as string;
+    const entity = this.hass?.states[entityId];
+    const unavailable = !this.hass || !entity || isUnavailable(entity);
+    const value = unavailable ? '—' : this._formatZoneValue(key, entity!);
+    return html`
+      <div class="zone-row">
+        <ha-icon icon=${ZONE_ENTITY_ICON[key]}></ha-icon>
+        <span class="zone-label">${localize(language, `zone_metric.${key}`)}</span>
+        <span class="zone-value">${value}</span>
+        ${unavailable
+          ? html`<span class="zone-warning" title=${localize(language, 'zone.entity_unavailable', { entity: entityId })}>
+              <ha-icon icon="mdi:alert-circle-outline"></ha-icon>
+            </span>`
+          : nothing}
       </div>
     `;
   }
@@ -414,14 +549,16 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       overflow: hidden;
       padding: 0;
       border: none;
+      display: flex;
+      flex-direction: column;
     }
     .scene {
       position: relative;
       width: 100%;
-      height: 100%;
       min-height: 480px;
       overflow: hidden;
       background: #10131c;
+      flex-shrink: 0;
     }
     canvas.bg-canvas {
       position: absolute;
@@ -444,12 +581,13 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       z-index: 2;
       pointer-events: none;
     }
-    .ui-layer {
+    .scene-overlay {
       position: absolute;
       inset: 0;
       z-index: 3;
       display: flex;
       flex-direction: column;
+      align-items: flex-start;
       gap: 12px;
       padding: 16px;
       color: var(--text-color, #fff);
@@ -460,6 +598,13 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       font-size: 1.4rem;
       font-weight: 600;
       text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    }
+    .info {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px;
+      background: rgba(16, 19, 28, 0.94);
     }
     .panel {
       background: rgba(255, 255, 255, var(--panel-opacity, 0.5));
@@ -492,12 +637,20 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       font-size: 0.95rem;
       opacity: 0.9;
     }
-    .panel.metrics {
+    .panel-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      opacity: 0.8;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .panel.metrics .metrics-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 10px 16px;
     }
-    .density-compact .panel.metrics {
+    .density-compact .metrics-grid {
       grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
       gap: 6px 10px;
     }
@@ -514,9 +667,6 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     .metric-value {
       margin-left: auto;
       font-weight: 600;
-    }
-    .panel.forecast {
-      margin-top: auto;
     }
     .forecast-title {
       font-size: 0.85rem;
@@ -537,9 +687,92 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       font-size: 0.8rem;
       min-width: 48px;
     }
+    .alerts {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .alert {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: var(--panel-radius, 18px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+    }
+    .alert ha-icon {
+      --mdc-icon-size: 24px;
+      margin-top: 2px;
+    }
+    .alert-info {
+      background: rgba(33, 150, 243, 0.35);
+    }
+    .alert-warning {
+      background: rgba(255, 152, 0, 0.4);
+    }
+    .alert-critical {
+      background: rgba(211, 47, 47, 0.45);
+    }
+    .alert-name {
+      font-weight: 700;
+    }
+    .alert-message {
+      font-size: 0.85rem;
+      opacity: 0.95;
+    }
+    .zones-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .zone-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .zone-header ha-icon {
+      color: var(--accent-color, #7ec8ff);
+    }
+    .zone-name {
+      font-weight: 700;
+      flex: 1;
+    }
+    .zone-kind {
+      font-size: 0.75rem;
+      opacity: 0.75;
+      text-transform: uppercase;
+    }
+    .zone-empty {
+      font-size: 0.8rem;
+      opacity: 0.7;
+    }
+    .zone-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      padding: 3px 0;
+    }
+    .zone-row ha-icon {
+      --mdc-icon-size: 18px;
+      color: var(--accent-color, #7ec8ff);
+    }
+    .zone-value {
+      margin-left: auto;
+      font-weight: 600;
+    }
+    .zone-warning ha-icon {
+      --mdc-icon-size: 16px;
+      color: #ffb300;
+    }
     @media (max-width: 480px) {
-      .panel.metrics {
+      .panel.metrics .metrics-grid {
         grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      }
+      .zones-grid {
+        grid-template-columns: 1fr;
       }
       .temperature {
         font-size: 1.5rem;

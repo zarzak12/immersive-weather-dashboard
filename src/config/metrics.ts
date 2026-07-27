@@ -16,6 +16,30 @@ export interface MetricDefinition {
  * matches during auto-discovery.
  */
 export const METRIC_CATALOG: Record<MetricKey, MetricDefinition> = {
+  outdoor_temperature: {
+    key: 'outdoor_temperature',
+    weatherAttribute: 'temperature',
+    deviceClasses: ['temperature'],
+    domains: ['sensor'],
+    keywords: [
+      'outdoor_temperature',
+      'exterior_temperature',
+      'outdoor',
+      'exterieur',
+      'exterieure',
+      'dehors',
+      'outside',
+      'garden',
+      'jardin',
+      'temperature_exterieure',
+      'ext_temperature',
+      'weather_temperature',
+      'station_meteo',
+      'meteo'
+    ],
+    keywordRequired: true,
+    defaultIcon: 'mdi:thermometer'
+  },
   apparent_temperature: {
     key: 'apparent_temperature',
     weatherAttribute: 'apparent_temperature',
