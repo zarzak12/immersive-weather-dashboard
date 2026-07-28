@@ -824,54 +824,47 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     })() : nothing;
 
     return html`
-      <div class="panel comfort-section">
-        <div class="panel-title">${localize(language, 'comfort.section_title')}</div>
-        <div class="comfort-columns">
-          <!-- Outdoor column -->
-          <div class="comfort-col">
-            <div class="comfort-col-title">${localize(language, 'comfort.outdoor_panel_title')}</div>
-            ${outdoorTempC !== undefined && outdoorRH !== undefined
-              ? this._comfortInsight('mdi:weather-partly-cloudy', summaryText, undefined, 'info', 'comfort.outdoor_summary', language)
-              : html`<div class="comfort-unavailable">${localize(language, 'comfort.outdoor_data_unavailable')}</div>`}
-            ${saturationInsight}
-            <div class="comfort-metrics-grid">
-              ${outdoorTempC !== undefined
-                ? this._comfortCard('mdi:thermometer', localize(language, 'metrics.outdoor_temperature'), this._formatMetricValue('outdoor_temperature', outdoorTempResolved.value, outdoorTempResolved.unit, language), tempCategory ? localize(language, `comfort.temp_${tempCategory}`) : undefined, 'metrics.outdoor_temperature', language)
-                : nothing}
-              ${outdoorRH !== undefined
-                ? this._comfortCard('mdi:water-percent', localize(language, 'metrics.humidity'), formatPercent(outdoorRH), rhCategory ? localize(language, `comfort.rh_${rhCategory}`) : undefined, 'metrics.humidity', language)
-                : nothing}
-              ${outdoorDPDisplay !== '—'
-                ? this._comfortCard('mdi:water', localize(language, 'comfort.dew_point_label'), outdoorDPDisplay, outdoorDPTag, 'comfort.dew_point_outdoor', language)
-                : nothing}
-              ${outdoorPressure !== undefined
-                ? this._comfortCard('mdi:gauge', localize(language, 'metrics.pressure'), this._formatMetricValue('pressure', outdoorPressure, resolved.pressure?.unit, language), pressureCategory ? localize(language, `comfort.pressure_${pressureCategory}`) : undefined, 'metrics.pressure', language)
-                : nothing}
-            </div>
-            ${ahInsight}
-          </div>
-          <!-- Indoor column -->
-          <div class="comfort-col">
-            <div class="comfort-col-title">${localize(language, 'comfort.indoor_panel_title')}</div>
-            ${!zone ? html`<div class="comfort-unavailable">${localize(language, 'comfort.no_indoor_zone')}</div>` : nothing}
-            ${zone && (indoorTempC === undefined || indoorRH === undefined)
-              ? html`<div class="comfort-unavailable">${localize(language, 'comfort.indoor_data_unavailable')}</div>`
-              : nothing}
-            <div class="comfort-metrics-grid">
-              ${indoorTempDisplay ? this._comfortCard('mdi:thermometer', localize(language, 'zone_metric.temperature'), indoorTempDisplay, indoorTempCategory ? localize(language, `comfort.indoor_temperature_${indoorTempCategory}`) : undefined, 'zone_metric.temperature', language) : nothing}
-              ${indoorRH !== undefined ? this._comfortCard('mdi:water-percent', localize(language, 'zone_metric.humidity'), formatPercent(indoorRH), indoorRHCategory ? localize(language, `comfort.indoor_humidity_${indoorRHCategory}`) : undefined, 'zone_metric.humidity', language) : nothing}
-              ${indoorDPCalcC !== undefined
-                ? this._comfortCard('mdi:water', localize(language, 'comfort.indoor_dew_point_label'), indoorDPDisplay, indoorDPTag, 'comfort.dew_point_indoor', language)
-                : nothing}
-              ${surfaceTempC !== undefined
-                ? this._comfortCard('mdi:window-closed-variant', localize(language, 'comfort.surface_label'), surfaceDisplay, surfaceTag, 'comfort.surface_temperature', language)
-                : nothing}
-            </div>
-            ${condensationInsight}
-            ${ventilationInsight}
-            ${coolingInsight}
-          </div>
+      <div class="panel comfort-panel">
+        <div class="panel-title">${localize(language, 'comfort.outdoor_panel_title')}</div>
+        ${outdoorTempC !== undefined && outdoorRH !== undefined
+          ? this._comfortInsight('mdi:weather-partly-cloudy', summaryText, undefined, 'info', 'comfort.outdoor_summary', language)
+          : html`<div class="comfort-unavailable">${localize(language, 'comfort.outdoor_data_unavailable')}</div>`}
+        ${saturationInsight}
+        <div class="comfort-metrics-grid">
+          ${outdoorTempC !== undefined
+            ? this._comfortCard('mdi:thermometer', localize(language, 'metrics.outdoor_temperature'), this._formatMetricValue('outdoor_temperature', outdoorTempResolved.value, outdoorTempResolved.unit, language), tempCategory ? localize(language, `comfort.temp_${tempCategory}`) : undefined, 'metrics.outdoor_temperature', language)
+            : nothing}
+          ${outdoorRH !== undefined
+            ? this._comfortCard('mdi:water-percent', localize(language, 'metrics.humidity'), formatPercent(outdoorRH), rhCategory ? localize(language, `comfort.rh_${rhCategory}`) : undefined, 'metrics.humidity', language)
+            : nothing}
+          ${outdoorDPDisplay !== '—'
+            ? this._comfortCard('mdi:water', localize(language, 'comfort.dew_point_label'), outdoorDPDisplay, outdoorDPTag, 'comfort.dew_point_outdoor', language)
+            : nothing}
+          ${outdoorPressure !== undefined
+            ? this._comfortCard('mdi:gauge', localize(language, 'metrics.pressure'), this._formatMetricValue('pressure', outdoorPressure, resolved.pressure?.unit, language), pressureCategory ? localize(language, `comfort.pressure_${pressureCategory}`) : undefined, 'metrics.pressure', language)
+            : nothing}
         </div>
+        ${ahInsight}
+      </div>
+      <div class="panel comfort-panel">
+        <div class="panel-title">${localize(language, 'comfort.indoor_panel_title')}</div>
+        ${!zone ? html`<div class="comfort-unavailable">${localize(language, 'comfort.no_indoor_zone')}</div>` : nothing}
+        ${zone && (indoorTempC === undefined || indoorRH === undefined)
+          ? html`<div class="comfort-unavailable">${localize(language, 'comfort.indoor_data_unavailable')}</div>`
+          : nothing}
+        <div class="comfort-metrics-grid">
+          ${indoorTempDisplay ? this._comfortCard('mdi:thermometer', localize(language, 'zone_metric.temperature'), indoorTempDisplay, indoorTempCategory ? localize(language, `comfort.indoor_temperature_${indoorTempCategory}`) : undefined, 'zone_metric.temperature', language) : nothing}
+          ${indoorRH !== undefined ? this._comfortCard('mdi:water-percent', localize(language, 'zone_metric.humidity'), formatPercent(indoorRH), indoorRHCategory ? localize(language, `comfort.indoor_humidity_${indoorRHCategory}`) : undefined, 'zone_metric.humidity', language) : nothing}
+          ${indoorDPCalcC !== undefined
+            ? this._comfortCard('mdi:water', localize(language, 'comfort.indoor_dew_point_label'), indoorDPDisplay, indoorDPTag, 'comfort.dew_point_indoor', language)
+            : nothing}
+          ${surfaceTempC !== undefined
+            ? this._comfortCard('mdi:window-closed-variant', localize(language, 'comfort.surface_label'), surfaceDisplay, surfaceTag, 'comfort.surface_temperature', language)
+            : nothing}
+        </div>
+        ${condensationInsight}
+        ${ventilationInsight}
+        ${coolingInsight}
       </div>
     `;
   }
@@ -1152,27 +1145,13 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       z-index: 100;
       pointer-events: none;
     }
-    .comfort-section {
-      padding: 12px 16px;
-      container-type: inline-size;
-    }
-    .comfort-columns {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px 16px;
-    }
-    .comfort-col {
+    .comfort-panel {
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
-    .comfort-col-title {
-      font-size: 0.8rem;
-      font-weight: 600;
-      opacity: 0.8;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      margin-bottom: 4px;
+    .comfort-panel .panel-title {
+      margin-bottom: 0;
     }
     .comfort-insight {
       display: flex;
@@ -1283,11 +1262,6 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       font-size: 0.85rem;
       opacity: 0.75;
       padding: 8px 0;
-    }
-    @container (max-width: 520px) {
-      .comfort-columns {
-        grid-template-columns: 1fr;
-      }
     }
     @media (max-width: 480px) {
       .panel.metrics .metrics-grid {
