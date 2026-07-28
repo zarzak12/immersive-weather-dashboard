@@ -116,6 +116,12 @@
       "ventilation": "Compares indoor and outdoor absolute humidity. Opening windows can remove moisture when outdoor air contains sufficiently less water vapor, but this display does not account for pollution, security or noise.",
       "cooling": "Checks whether the room is above your comfort maximum and outdoor air is cooler by the configured difference. It does not account for wind, solar gains or air quality.",
       "surface_temperature": "Window or surface temperature used for condensation analysis. A sensor is treated as measured; without one, the displayed estimate uses indoor/outdoor temperatures and your glazing factor."
+    },
+    "sun": {
+      "azimuth": "Compass direction of the sun, measured clockwise from true north (0° = north, 90° = east, 180° = south, 270° = west).",
+      "elevation": "Angle of the sun above the horizon. 0° sits on the horizon, 90° is straight overhead; negative values mean the sun is below the horizon.",
+      "solar_noon": "The moment the sun is highest and crosses the local meridian — usually not exactly 12:00 clock time, because of your longitude within the timezone and the equation of time.",
+      "day_length": "Time between sunrise and sunset today at your location."
     }
   },
   "comfort": {
@@ -174,6 +180,28 @@
     "outdoor_data_unavailable": "Outdoor temperature and humidity required",
     "tooltip_aria_label": "Help: {topic}"
   },
+  "sun": {
+    "section_title": "Sun path",
+    "sunrise": "Sunrise",
+    "solar_noon": "Solar noon",
+    "sunset": "Sunset",
+    "day_length": "Day length",
+    "azimuth": "Azimuth",
+    "elevation": "Elevation",
+    "season": "Season",
+    "now": "Now",
+    "daytime": "Daytime",
+    "night": "Night",
+    "polar_day": "Polar day — the sun stays above the horizon all day",
+    "polar_night": "Polar night — the sun stays below the horizon all day",
+    "unavailable": "Set your Home Assistant location (latitude/longitude) to show the sun path."
+  },
+  "season": {
+    "spring": "Spring",
+    "summer": "Summer",
+    "autumn": "Autumn",
+    "winter": "Winter"
+  },
   "editor": {
     "tab_data": "Data source",
     "tab_mapping": "Entity mapping",
@@ -184,6 +212,7 @@
     "tab_environment": "Environment",
     "tab_alerts": "Alerts",
     "tab_comfort": "Comfort analysis",
+    "tab_sun": "Sun path",
     "title": "Card title",
     "title_helper": "Optional title displayed at the top of the card.",
     "weather_entity": "Weather entity",
@@ -288,6 +317,8 @@
     "comfort_ventilation_delta": "Ventilation threshold (g/m³ absolute humidity difference)",
     "comfort_cooling_delta": "Cooling threshold (°C temperature difference)",
     "comfort_glazing_factor": "Glazing factor (0 – 1)",
-    "comfort_glazing_factor_helper": "Approximate fraction of the outdoor–indoor temperature difference used to estimate the inner window surface. Indicative center-pane ranges: high-performance glazing 0.08–0.12, modern double glazing 0.14–0.20, older double glazing 0.25–0.40, single glazing 0.60–0.75. Frames, edges, wind and installation can differ greatly; use a surface sensor for reliable assessment."
+    "comfort_glazing_factor_helper": "Approximate fraction of the outdoor–indoor temperature difference used to estimate the inner window surface. Indicative center-pane ranges: high-performance glazing 0.08–0.12, modern double glazing 0.14–0.20, older double glazing 0.25–0.40, single glazing 0.60–0.75. Frames, edges, wind and installation can differ greatly; use a surface sensor for reliable assessment.",
+    "sun_enabled": "Enable the sun path panel",
+    "sun_helper": "Shows the sun's daily arc (sunrise, solar noon, sunset), its current azimuth and elevation, the day length and the season — all computed locally from your Home Assistant location, with no network calls."
   }
 }

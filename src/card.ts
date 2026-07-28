@@ -40,6 +40,7 @@ import {
   ventilationRecommendation
 } from './data/comfort';
 import { conditionToScene, isDaytime } from './data/weather-condition';
+import { season, solarPosition, sunTimes } from './data/solar';
 import { localize } from './localize/localize';
 import { SceneRenderer, type SceneState } from './rendering/scene-renderer';
 
@@ -126,6 +127,7 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     if (this._config.alerts.some((rule) => rule.enabled)) rows += 1;
     if (this._config.metrics.some((metric) => metric.visible)) rows += 2;
     if (this._config.comfort?.enabled) rows += 4;
+    if (this._config.sun?.enabled) rows += 3;
     const visibleZones = this._config.environment_zones.filter((zone) => zone.visible).length;
     if (visibleZones > 0) rows += Math.ceil(visibleZones / 2) * 2;
     if (this._config.forecast.show_hourly) rows += 2;
@@ -405,6 +407,7 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
           ${activeAlerts.length ? this._renderAlerts(activeAlerts, language) : nothing}
           ${this._renderMetrics(resolvedMetrics, language)}
           ${this._config.comfort?.enabled ? this._renderComfort(resolvedMetrics, language) : nothing}
+          ${this._config.sun?.enabled ? this._renderSunPath(language) : nothing}
           ${this._renderZones(language)}
           ${weatherEntityId ? this._renderForecast(language) : nothing}
           ${issues.length
@@ -869,6 +872,141 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     `;
   }
 
+  private _sunStat(icon: string, label: string, value: string, helpKey: string | undefined, language: string) {
+    return html`
+      <div
+        class="sun-stat${helpKey ? ' has-tip' : ''}"
+        tabindex=${helpKey ? '0' : nothing}
+        aria-describedby=${helpKey ? this._tipId(`sun-${helpKey}`) : nothing}
+      >
+        <ha-icon icon=${icon}></ha-icon>
+        <span class="sun-stat-label">${label}</span>
+        <span class="sun-stat-value">${value}</span>
+        ${helpKey ? this._tooltip(helpKey, `sun-${helpKey}`, language) : nothing}
+      </div>
+    `;
+  }
+
+  /**
+   * Renders the optional sun-path tile: a horizon-to-horizon arc of today's sun
+   * trajectory with the current position marked, plus sunrise/solar-noon/sunset
+   * times and a readout of the live azimuth, elevation, day length and season.
+   * Everything is computed locally from the Home Assistant instance's
+   * latitude/longitude — no network calls.
+   */
+  private _renderSunPath(language: string) {
+    if (!this.hass) return nothing;
+    const lat = this.hass.config?.latitude;
+    const lon = this.hass.config?.longitude;
+    if (typeof lat !== 'number' || typeof lon !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return html`<div class="panel notice">${localize(language, 'sun.unavailable')}</div>`;
+    }
+
+    const now = new Date();
+    const times = sunTimes(now, lat, lon);
+    const pos = solarPosition(now, lat, lon);
+    const seas = season(now, lat);
+
+    // Geometry of the SVG canvas.
+    const W = 320;
+    const H = 172;
+    const xLeft = 24;
+    const xRight = 296;
+    const horizonY = 128;
+    const topY = 26;
+    const span = xRight - xLeft;
+    const height = horizonY - topY;
+
+    const noonElev = solarPosition(times.solarNoon, lat, lon).elevation;
+    const maxElev = Math.max(noonElev, 1); // avoid divide-by-zero and keep flat winter/polar arcs sane
+
+    const dayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const start = times.polar === 'none' ? times.sunrise!.getTime() : dayStart;
+    const end = times.polar === 'none' ? times.sunset!.getTime() : dayStart + 86400000;
+
+    const yFor = (elevation: number) => horizonY - (Math.min(Math.max(elevation, 0), maxElev) / maxElev) * height;
+    const xFor = (time: number) => xLeft + (span * (time - start)) / (end - start);
+
+    const SAMPLES = 64;
+    const pts: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i <= SAMPLES; i += 1) {
+      const t = start + ((end - start) * i) / SAMPLES;
+      const e = solarPosition(new Date(t), lat, lon).elevation;
+      pts.push({ x: xLeft + (span * i) / SAMPLES, y: yFor(e) });
+    }
+    const curve = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+    const area = `M ${xLeft} ${horizonY} ${pts.map((p) => `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')} L ${xRight} ${horizonY} Z`;
+
+    const noonX = xFor(times.solarNoon.getTime());
+    const sunUp = pos.elevation >= -0.833;
+    const sunX = xFor(Math.min(Math.max(now.getTime(), start), end));
+    const sunY = yFor(pos.elevation);
+
+    const compass = bearingToCompass(pos.azimuth);
+    const dl = times.dayLengthMinutes ?? 0;
+    const dayLengthStr =
+      times.polar === 'day'
+        ? '24 h 00'
+        : times.polar === 'night'
+          ? '0 h 00'
+          : `${Math.floor(dl / 60)} h ${String(Math.round(dl % 60)).padStart(2, '0')}`;
+
+    const sunriseStr = times.polar === 'none' ? formatTime(times.sunrise, language) : '—';
+    const sunsetStr = times.polar === 'none' ? formatTime(times.sunset, language) : '—';
+    const noonStr = formatTime(times.solarNoon, language);
+
+    return html`
+      <div class="panel sun-panel ${sunUp ? 'is-day' : 'is-night'}">
+        <div class="panel-title">${localize(language, 'sun.section_title')}</div>
+        <svg class="sun-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label=${localize(language, 'sun.section_title')}>
+          <defs>
+            <linearGradient id="iwd-sun-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--accent-color, #7ec8ff)" stop-opacity="0.45"></stop>
+              <stop offset="100%" stop-color="var(--accent-color, #7ec8ff)" stop-opacity="0.04"></stop>
+            </linearGradient>
+            <radialGradient id="iwd-sun-glow">
+              <stop offset="0%" stop-color="#ffe08a" stop-opacity="0.95"></stop>
+              <stop offset="100%" stop-color="#ffe08a" stop-opacity="0"></stop>
+            </radialGradient>
+          </defs>
+          <path class="sun-area" d=${area} fill="url(#iwd-sun-fill)"></path>
+          <path class="sun-curve" d=${curve} fill="none"></path>
+          <line class="sun-horizon" x1="0" y1=${horizonY} x2=${W} y2=${horizonY}></line>
+          <line
+            class="sun-noon-tick"
+            x1=${noonX.toFixed(1)}
+            y1=${yFor(noonElev).toFixed(1)}
+            x2=${noonX.toFixed(1)}
+            y2=${horizonY}
+          >
+            <title>${localize(language, 'help.sun.solar_noon')}</title>
+          </line>
+          <circle class="sun-end" cx=${xLeft} cy=${horizonY} r="3"></circle>
+          <circle class="sun-end" cx=${xRight} cy=${horizonY} r="3"></circle>
+          ${sunUp
+            ? html`<circle cx=${sunX.toFixed(1)} cy=${sunY.toFixed(1)} r="18" fill="url(#iwd-sun-glow)"></circle>
+                <circle class="sun-dot" cx=${sunX.toFixed(1)} cy=${sunY.toFixed(1)} r="6"></circle>`
+            : html`<circle class="moon-dot" cx=${(W / 2).toFixed(1)} cy=${(horizonY - 10).toFixed(1)} r="6"></circle>`}
+          <text class="sun-tl" x=${xLeft} y=${horizonY + 16} text-anchor="start">${sunriseStr}</text>
+          <text class="sun-tl" x=${noonX.toFixed(1)} y=${horizonY + 16} text-anchor="middle">${noonStr}</text>
+          <text class="sun-tl" x=${xRight} y=${horizonY + 16} text-anchor="end">${sunsetStr}</text>
+          <text class="sun-cap" x=${xLeft} y=${horizonY + 30} text-anchor="start">${localize(language, 'sun.sunrise')}</text>
+          <text class="sun-cap" x=${noonX.toFixed(1)} y=${horizonY + 30} text-anchor="middle">${localize(language, 'sun.solar_noon')}</text>
+          <text class="sun-cap" x=${xRight} y=${horizonY + 30} text-anchor="end">${localize(language, 'sun.sunset')}</text>
+        </svg>
+        ${times.polar !== 'none'
+          ? html`<div class="sun-note">${localize(language, times.polar === 'day' ? 'sun.polar_day' : 'sun.polar_night')}</div>`
+          : nothing}
+        <div class="sun-stats">
+          ${this._sunStat('mdi:compass-outline', localize(language, 'sun.azimuth'), `${Math.round(pos.azimuth)}° ${compass}`, 'sun.azimuth', language)}
+          ${this._sunStat('mdi:angle-acute', localize(language, 'sun.elevation'), `${Math.round(pos.elevation)}°`, 'sun.elevation', language)}
+          ${this._sunStat('mdi:timelapse', localize(language, 'sun.day_length'), dayLengthStr, 'sun.day_length', language)}
+          ${this._sunStat('mdi:leaf', localize(language, 'sun.season'), localize(language, `season.${seas}`), undefined, language)}
+        </div>
+      </div>
+    `;
+  }
+
   static styles = css`
     :host {
       display: block;
@@ -1223,7 +1361,8 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     .has-tip .cc-label,
     .has-tip .comfort-insight-text,
     .metric.has-tip .metric-label,
-    .zone-row.has-tip .zone-label {
+    .zone-row.has-tip .zone-label,
+    .sun-stat.has-tip .sun-stat-label {
       text-decoration: underline dotted;
       text-underline-offset: 2px;
       text-decoration-color: rgba(255, 255, 255, 0.32);
@@ -1262,6 +1401,96 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       font-size: 0.85rem;
       opacity: 0.75;
       padding: 8px 0;
+    }
+    .sun-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .sun-panel .panel-title {
+      margin-bottom: 0;
+    }
+    .sun-svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .sun-area {
+      transition: opacity 0.4s ease;
+    }
+    .sun-panel.is-night .sun-area {
+      opacity: 0.45;
+    }
+    .sun-curve {
+      stroke: var(--accent-color, #7ec8ff);
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .sun-horizon {
+      stroke: rgba(255, 255, 255, 0.25);
+      stroke-width: 1;
+    }
+    .sun-noon-tick {
+      stroke: rgba(255, 255, 255, 0.3);
+      stroke-width: 1;
+      stroke-dasharray: 2 3;
+    }
+    .sun-end {
+      fill: rgba(255, 255, 255, 0.5);
+    }
+    .sun-dot {
+      fill: #ffd873;
+      stroke: #fff3d0;
+      stroke-width: 1.5;
+    }
+    .moon-dot {
+      fill: #cdd6e6;
+    }
+    .sun-tl {
+      fill: var(--text-color, #fff);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .sun-cap {
+      fill: var(--text-color, #fff);
+      font-size: 9px;
+      opacity: 0.6;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .sun-note {
+      font-size: 0.8rem;
+      opacity: 0.8;
+    }
+    .sun-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .sun-stat {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.07);
+      font-size: 0.83rem;
+      min-width: 0;
+    }
+    .sun-stat ha-icon {
+      --mdc-icon-size: 18px;
+      color: var(--accent-color, #7ec8ff);
+      flex-shrink: 0;
+    }
+    .sun-stat-label {
+      opacity: 0.85;
+      min-width: 0;
+    }
+    .sun-stat-value {
+      margin-left: auto;
+      font-weight: 600;
+      white-space: nowrap;
     }
     @media (max-width: 480px) {
       .panel.metrics .metrics-grid {

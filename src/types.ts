@@ -222,6 +222,17 @@ export interface ComfortConfig {
   glazing_factor: number;
 }
 
+/**
+ * Sun-path panel configuration.
+ *
+ * Display-only; disabled by default. Uses the Home Assistant instance
+ * latitude/longitude to compute the sun's arc, key times and season locally.
+ */
+export interface SunConfig {
+  /** Feature flag — false by default. */
+  enabled: boolean;
+}
+
 export interface ImmersiveWeatherCardConfig {
   type: string;
   title?: string;
@@ -236,12 +247,13 @@ export interface ImmersiveWeatherCardConfig {
   environment_zones: EnvironmentZoneConfig[];
   alerts: AlertRuleConfig[];
   comfort: ComfortConfig;
+  sun: SunConfig;
 }
 
 export type PartialImmersiveWeatherCardConfig = Partial<
   Omit<
     ImmersiveWeatherCardConfig,
-    'entities' | 'animation' | 'scene' | 'appearance' | 'forecast' | 'metrics' | 'environment_zones' | 'alerts' | 'comfort'
+    'entities' | 'animation' | 'scene' | 'appearance' | 'forecast' | 'metrics' | 'environment_zones' | 'alerts' | 'comfort' | 'sun'
   >
 > & {
   entities?: ManualEntityMap;
@@ -253,6 +265,7 @@ export type PartialImmersiveWeatherCardConfig = Partial<
   environment_zones?: PartialEnvironmentZoneConfig[];
   alerts?: PartialAlertRuleConfig[];
   comfort?: Partial<ComfortConfig>;
+  sun?: Partial<SunConfig>;
 };
 
 export interface LovelaceCardConfig {

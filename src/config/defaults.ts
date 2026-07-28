@@ -13,7 +13,8 @@ import type {
   PartialAlertRuleConfig,
   PartialEnvironmentZoneConfig,
   PartialImmersiveWeatherCardConfig,
-  SceneConfig
+  SceneConfig,
+  SunConfig
 } from '../types';
 import { ALERT_LOGICS, ALERT_OPERATORS, ALERT_SEVERITIES, ENVIRONMENT_ZONE_ENTITY_KEYS, METRIC_KEYS } from '../types';
 
@@ -75,6 +76,10 @@ export const DEFAULT_COMFORT: ComfortConfig = {
   glazing_factor: 0.15
 };
 
+export const DEFAULT_SUN: SunConfig = {
+  enabled: false
+};
+
 export function defaultMetrics(): MetricConfig[] {
   return METRIC_KEYS.map((key, index) => ({
     key,
@@ -97,7 +102,15 @@ export function defaultConfig(): ImmersiveWeatherCardConfig {
     metrics: defaultMetrics(),
     environment_zones: [],
     alerts: [],
-    comfort: { ...DEFAULT_COMFORT }
+    comfort: { ...DEFAULT_COMFORT },
+    sun: { ...DEFAULT_SUN }
+  };
+}
+
+/** Normalizes partial sun-panel config against defaults. */
+function mergeSun(input: Partial<SunConfig> | undefined): SunConfig {
+  return {
+    enabled: typeof input?.enabled === 'boolean' ? input.enabled : DEFAULT_SUN.enabled
   };
 }
 
@@ -295,6 +308,7 @@ export function mergeConfig(input: PartialImmersiveWeatherCardConfig | undefined
     metrics: mergeMetrics(input.metrics),
     environment_zones: mergeEnvironmentZones(input.environment_zones),
     alerts: mergeAlerts(input.alerts),
-    comfort: mergeComfort(input.comfort)
+    comfort: mergeComfort(input.comfort),
+    sun: mergeSun(input.sun)
   };
 }

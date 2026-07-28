@@ -116,6 +116,12 @@
       "ventilation": "Compare les humidités absolues intérieure et extérieure. Aérer peut retirer de l'humidité lorsque l'air extérieur contient suffisamment moins de vapeur d'eau, sans tenir compte ici de la pollution, du bruit ou de la sécurité.",
       "cooling": "Vérifie si la pièce dépasse votre maximum de confort et si l'extérieur est plus frais de l'écart configuré. Le vent, le soleil et la qualité de l'air ne sont pas pris en compte.",
       "surface_temperature": "Température de vitre ou de surface utilisée pour l'analyse. Avec un capteur elle est mesurée ; sinon l'estimation affichée utilise les températures intérieure/extérieure et votre facteur de vitrage."
+    },
+    "sun": {
+      "azimuth": "Direction du soleil sur la boussole, mesurée dans le sens horaire depuis le nord géographique (0° = nord, 90° = est, 180° = sud, 270° = ouest).",
+      "elevation": "Hauteur du soleil au-dessus de l'horizon. 0° correspond à l'horizon, 90° au zénith ; une valeur négative signifie que le soleil est sous l'horizon.",
+      "solar_noon": "Moment où le soleil est au plus haut et franchit le méridien local — rarement exactement 12:00, à cause de votre longitude dans le fuseau et de l'équation du temps.",
+      "day_length": "Durée entre le lever et le coucher du soleil aujourd'hui à votre position."
     }
   },
   "comfort": {
@@ -174,6 +180,28 @@
     "outdoor_data_unavailable": "Température et humidité extérieures requises",
     "tooltip_aria_label": "Aide : {topic}"
   },
+  "sun": {
+    "section_title": "Course du soleil",
+    "sunrise": "Lever",
+    "solar_noon": "Midi solaire",
+    "sunset": "Coucher",
+    "day_length": "Durée du jour",
+    "azimuth": "Azimut",
+    "elevation": "Élévation",
+    "season": "Saison",
+    "now": "Maintenant",
+    "daytime": "Jour",
+    "night": "Nuit",
+    "polar_day": "Jour polaire — le soleil reste au-dessus de l'horizon toute la journée",
+    "polar_night": "Nuit polaire — le soleil reste sous l'horizon toute la journée",
+    "unavailable": "Renseignez la position de votre Home Assistant (latitude/longitude) pour afficher la course du soleil."
+  },
+  "season": {
+    "spring": "Printemps",
+    "summer": "Été",
+    "autumn": "Automne",
+    "winter": "Hiver"
+  },
   "editor": {
     "tab_data": "Source de données",
     "tab_mapping": "Association des entités",
@@ -184,6 +212,7 @@
     "tab_environment": "Environnement",
     "tab_alerts": "Alertes",
     "tab_comfort": "Analyse de confort",
+    "tab_sun": "Course du soleil",
     "title": "Titre de la carte",
     "title_helper": "Titre optionnel affiché en haut de la carte.",
     "weather_entity": "Entité météo",
@@ -288,6 +317,8 @@
     "comfort_ventilation_delta": "Seuil de ventilation (différence d'humidité absolue g/m³)",
     "comfort_cooling_delta": "Seuil de refroidissement (différence de température °C)",
     "comfort_glazing_factor": "Facteur de vitrage (0 – 1)",
-    "comfort_glazing_factor_helper": "Fraction approximative de l'écart de température extérieur-intérieur utilisée pour estimer la face intérieure de la vitre. Plages indicatives au centre du vitrage : haute performance 0,08–0,12, double vitrage moderne 0,14–0,20, ancien double vitrage 0,25–0,40, simple vitrage 0,60–0,75. Les cadres, bords, le vent et la pose peuvent fortement varier ; utilisez un capteur de surface pour une évaluation fiable."
+    "comfort_glazing_factor_helper": "Fraction approximative de l'écart de température extérieur-intérieur utilisée pour estimer la face intérieure de la vitre. Plages indicatives au centre du vitrage : haute performance 0,08–0,12, double vitrage moderne 0,14–0,20, ancien double vitrage 0,25–0,40, simple vitrage 0,60–0,75. Les cadres, bords, le vent et la pose peuvent fortement varier ; utilisez un capteur de surface pour une évaluation fiable.",
+    "sun_enabled": "Activer la tuile de course du soleil",
+    "sun_helper": "Affiche l'arc quotidien du soleil (lever, midi solaire, coucher), son azimut et son élévation actuels, la durée du jour et la saison — le tout calculé localement à partir de la position de votre Home Assistant, sans aucun appel réseau."
   }
 }
