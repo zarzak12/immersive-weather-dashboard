@@ -44,6 +44,7 @@ The result is a dashboard/wall-panel card that feels alive and reacts to your ac
 ## Feature tour
 
 - Full-screen immersive layout, designed for phones, tablets, desktop dashboards and wall-mounted panels. By default the animated **scene stays a compact, unobstructed viewport at the top** of the card, with all metrics, zones, alerts and forecasts flowing naturally below it — nothing overlaps the house photo or the sky.
+- **Responsive information area** — when the card is given width (for example stretched toward full width in a **Sections** dashboard), the panels below the scene flow into a **multi-column masonry layout** instead of one long vertical band, and collapse back to a single column on phones. The column count follows the card's actual rendered width, not the browser window.
 - Procedural sky/weather engine: day/night gradient, sun, moon, twinkling stars, drifting clouds, rain, pouring rain, snow, snow+rain mix, hail, fog, wind streaks, lightning flashes for thunderstorms.
 - Discreet glassmorphism panels (blurred, translucent) for the current conditions, the outdoor station, environment zones, alerts and the forecasts, so the scene stays visible underneath and the information underneath stays fully readable.
 - Full graphical configuration — **no YAML editing is required** after installing through HACS. Every option (image, colors, opacity, metrics, environment zones, alert rules, forecasts…) has a UI control.
@@ -54,7 +55,7 @@ The result is a dashboard/wall-panel card that feels alive and reacts to your ac
 - Respects `prefers-reduced-motion`, pauses rendering when the card is scrolled off-screen or the browser tab is hidden, and caps the device pixel ratio to control GPU/CPU cost.
 - Animation quality and intensity controls so low-power wall tablets and Raspberry Pi displays stay smooth.
 - English and French interface, following `hass.locale.language`, with English fallback.
-- Optional **Comfort analysis** — an educational, display-only condensation risk panel (disabled by default). Computes dew point (Magnus formula), absolute humidity (g/m³), and condensation margin from outdoor readings and the selected indoor zone; shows fixed safe/warning/critical risk bands; supports an optional glazing or surface temperature sensor, or a configurable glazing-factor fallback estimate (default 0.15, explicitly labeled as an estimate). Technical values carry **educational tooltips** accessible by hover, keyboard focus, and touch/click.
+- Optional **Comfort analysis** — an educational, display-only condensation risk panel (disabled by default). Computes dew point (Magnus formula), absolute humidity (g/m³), and condensation margin from outdoor readings and the selected indoor zone; shows fixed safe/warning/critical risk bands; supports an optional glazing or surface temperature sensor, or a configurable glazing-factor fallback estimate (default 0.15, explicitly labeled as an estimate). It renders as two tiles (**Outdoor conditions** and **Home & comfort**) that take part in the responsive layout. Technical values carry **educational tooltips**, revealed by hovering, keyboard-focusing or tapping the value itself — with no separate "?" button cluttering the display.
 
 ## Requirements
 
@@ -108,6 +109,8 @@ Starting with v1.0.1, the card is split into two clearly separated regions, stac
 
 1. **The scene** — a fixed-height viewport at the top containing only the animated sky/weather canvases, your house photo, and a small title/current-condition summary overlay. `Appearance → Minimum height` and `Appearance → Aspect ratio` size **this viewport only**. The scene never grows to accommodate other content and nothing else is drawn on top of it, so your house photo and the animation stay fully visible.
 2. **The information area** — a normal-flow section below the scene containing, in order: active alert recommendations, the outdoor station metrics, environment zone cards, and forecasts. This area has **no forced height or clipping**: the card grows naturally to fit however much information you have configured, and Home Assistant's Sections view is told to honor that natural height (no more forced 8-row minimum). Forecast rows may scroll horizontally on narrow screens, but the rest of the information area is never hidden or cut off.
+
+On a card wide enough — for example when stretched toward full width in a **Sections** dashboard — the information area no longer stacks into a single tall band. Its panels (the outdoor station, the two optional Comfort tiles, the environment zones and the forecasts) flow into a **responsive multi-column masonry layout**, sitting side by side. The number of columns follows the card's *actual rendered width* rather than the browser window, so it adapts correctly even in a narrow slot on a large screen, and collapses back to a single column on phones and narrow cards. Active alert recommendations and validation notices always span the full width.
 
 This directly replaces the v1.0 behavior, where every panel was absolutely positioned on top of the scene (covering most of the house/sky) inside a height-constrained `.scene` element. If you are upgrading from v1.0, expect the card to look different immediately after updating — taller overall, but with an unobstructed scene and fully readable information beneath it — see [Migration and configuration compatibility](#migration-and-configuration-compatibility).
 
@@ -244,7 +247,7 @@ Since forecasts are no longer exposed as weather-entity state attributes in mode
 
 ## Comfort analysis (condensation risk)
 
-The **Comfort / Confort** tab adds an optional, display-only condensation risk analysis. It is **disabled by default** (`comfort.enabled: false`) and produces no display unless explicitly enabled — no YAML editing is required.
+The **Comfort / Confort** tab adds an optional, display-only condensation risk analysis. It is **disabled by default** (`comfort.enabled: false`) and produces no display unless explicitly enabled — no YAML editing is required. When enabled it renders as two independent tiles — **Outdoor conditions** and **Home & comfort** — which participate in the responsive multi-column layout, so on a wide card they can sit side by side and on a narrow card they stack.
 
 ### Inputs
 
@@ -293,19 +296,19 @@ The compact temperature, humidity and pressure cards also show a plain-language 
 
 ### Educational tooltips
 
-Each station, environment and computed value has a **? help control** with an educational tooltip explaining what the value means and, where applicable, how it is derived. Tooltips are triggered by:
+Every station metric, environment zone reading and computed comfort value carries an educational tooltip explaining what the value means and, where applicable, how it is derived. There is **no separate "?" button**: the value tile/row is itself the tooltip trigger, which keeps the display uncluttered. A subtle dotted underline under the label marks the values that carry an explanation. Tooltips are triggered by:
 
-- **Hover** — mouse pointer over the **?** control
-- **Keyboard focus** — Tab to the **?** control; the explanation appears on focus
-- **Touch / click** — tap the **?** control on touch screens
+- **Hover** — mouse pointer over the value
+- **Keyboard focus** — Tab to the value (each is focusable); the explanation appears on focus
+- **Touch / tap** — tap the value on touch screens
 
 Tooltips convey explanatory information only. The Comfort analysis makes **no scientific or safety-precision claims** — it is an informational display tool, not a certified measurement instrument or professional advice of any kind.
 
 ## Responsiveness, performance, accessibility, privacy
 
-- **Responsive** — the scene viewport fills its container and adapts to phones, tablets, desktop cards and wall panels; on narrow/mobile screens the entire scene is shown first, followed by the full information area — nothing is hidden, only forecast rows may scroll horizontally. Panel density and font sizes adjust at small widths.
+- **Responsive** — the scene viewport fills its container and adapts to phones, tablets, desktop cards and wall panels; on narrow/mobile screens the entire scene is shown first, followed by the full information area — nothing is hidden, only forecast rows may scroll horizontally. Panel density and font sizes adjust at small widths. On a card wide enough (e.g. stretched in a Sections dashboard) the information panels lay out as **responsive masonry columns** instead of one tall band; the column count tracks the card's real rendered width (not the viewport), so it works even in a narrow slot on a large screen and collapses to a single column on narrow cards.
 - **Performance** — animation quality/intensity are configurable; the device pixel ratio used for canvases is capped at 2 to avoid excessive GPU/CPU load on high-DPI displays; rendering pauses automatically when the card scrolls off-screen (`IntersectionObserver`) or the browser tab is hidden (`visibilitychange`). The renderer's `ResizeObserver` stays attached to the scene viewport, so resizing/reconnecting the card (e.g. switching dashboards) keeps the animation correctly sized.
-- **Accessibility** — the renderer honors the operating system's `prefers-reduced-motion` setting: a single static frame is drawn instead of a continuous animation loop. Educational tooltip labels in the Comfort analysis panel are fully keyboard-reachable (Tab to focus, Space/Enter to expand) and respond to touch/tap — no pointer-only interactions.
+- **Accessibility** — the renderer honors the operating system's `prefers-reduced-motion` setting: a single static frame is drawn instead of a continuous animation loop. Educational tooltips across the station, environment and comfort panels are fully keyboard-reachable — each value is focusable via Tab and reveals its explanation on focus (`aria-describedby`) — and respond to touch/tap, with no pointer-only interactions.
 - **Privacy** — the card makes **no network calls of its own** at runtime beyond what your Home Assistant frontend already does (loading your configured house image and talking to your own Home Assistant instance). There is no telemetry, analytics, or third-party service involved in rendering the weather scene. Alert rules are evaluated **entirely locally in the browser**, only while the card is rendered — nothing is sent anywhere and no Home Assistant service/notification is ever triggered by them.
 
 ## Troubleshooting
