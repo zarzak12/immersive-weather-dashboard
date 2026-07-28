@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CARD_TYPE, defaultConfig, mergeConfig } from '../src/config/defaults';
+import { CARD_TYPE, DEFAULT_COMFORT, defaultConfig, mergeConfig } from '../src/config/defaults';
 
 describe('mergeConfig', () => {
   it('returns full defaults when given undefined', () => {
@@ -147,5 +147,128 @@ describe('mergeConfig', () => {
       alerts: [{ id: 'alert-1', conditions: [{ id: 'cond-1', entity_id: '', operator: 'gt', threshold: 0 }] }]
     });
     expect(config.alerts[0].conditions).toEqual([{ id: 'cond-1', entity_id: '', operator: 'gt', threshold: 0 }]);
+  });
+});
+
+describe('mergeConfig — comfort', () => {
+  it('includes disabled comfort defaults when comfort is not provided', () => {
+    const config = mergeConfig(undefined);
+    expect(config.comfort).toEqual(DEFAULT_COMFORT);
+    expect(config.comfort.enabled).toBe(false);
+  });
+
+  it('defaultConfig includes comfort with disabled flag', () => {
+    const config = defaultConfig();
+    expect(config.comfort.enabled).toBe(false);
+    expect(config.comfort.indoor_temperature_min).toBe(18);
+    expect(config.comfort.indoor_temperature_max).toBe(26);
+    expect(config.comfort.glazing_factor).toBe(0.15);
+  });
+
+  it('enables comfort when explicitly set', () => {
+    const config = mergeConfig({ comfort: { enabled: true } });
+    expect(config.comfort.enabled).toBe(true);
+    // unrelated defaults are preserved
+    expect(config.comfort.glazing_factor).toBe(0.15);
+  });
+
+  it('preserves unrelated defaults when only a partial comfort object is given', () => {
+    const config = mergeConfig({ comfort: { indoor_temperature_max: 24 } });
+    expect(config.comfort.indoor_temperature_max).toBe(24);
+    expect(config.comfort.indoor_temperature_min).toBe(DEFAULT_COMFORT.indoor_temperature_min);
+    expect(config.comfort.indoor_humidity_min).toBe(DEFAULT_COMFORT.indoor_humidity_min);
+    expect(config.comfort.ventilation_humidity_delta).toBe(DEFAULT_COMFORT.ventilation_humidity_delta);
+  });
+
+  it('stores indoor_zone as an empty string by default', () => {
+    const config = mergeConfig(undefined);
+    expect(config.comfort.indoor_zone).toBe('');
+  });
+
+  it('stores an explicit indoor_zone id', () => {
+    const config = mergeConfig({ comfort: { indoor_zone: 'zone-living' } });
+    expect(config.comfort.indoor_zone).toBe('zone-living');
+  });
+
+  it('omits surface_temperature_entity when not set', () => {
+    const config = mergeConfig(undefined);
+    expect(config.comfort.surface_temperature_entity).toBeUndefined();
+  });
+
+  it('stores a valid surface_temperature_entity string', () => {
+    const config = mergeConfig({ comfort: { surface_temperature_entity: 'sensor.window_temp' } });
+    expect(config.comfort.surface_temperature_entity).toBe('sensor.window_temp');
+  });
+
+  it('drops a surface_temperature_entity that is an empty string', () => {
+    const config = mergeConfig({ comfort: { surface_temperature_entity: '' } });
+    expect(config.comfort.surface_temperature_entity).toBeUndefined();
+  });
+
+  it('clamps indoor_temperature_min/max to −10…40', () => {
+    const config = mergeConfig({ comfort: { indoor_temperature_min: -20, indoor_temperature_max: 50 } });
+    expect(config.comfort.indoor_temperature_min).toBe(-10);
+    expect(config.comfort.indoor_temperature_max).toBe(40);
+  });
+
+  it('clamps indoor_humidity_min/max to 0…100', () => {
+    const config = mergeConfig({ comfort: { indoor_humidity_min: -5, indoor_humidity_max: 110 } });
+    expect(config.comfort.indoor_humidity_min).toBe(0);
+    expect(config.comfort.indoor_humidity_max).toBe(100);
+  });
+
+  it('normalizes an inverted temperature range by swapping min and max', () => {
+    const config = mergeConfig({ comfort: { indoor_temperature_min: 30, indoor_temperature_max: 20 } });
+    expect(config.comfort.indoor_temperature_min).toBe(20);
+    expect(config.comfort.indoor_temperature_max).toBe(30);
+  });
+
+  it('normalizes an inverted humidity range by swapping min and max', () => {
+    const config = mergeConfig({ comfort: { indoor_humidity_min: 70, indoor_humidity_max: 40 } });
+    expect(config.comfort.indoor_humidity_min).toBe(40);
+    expect(config.comfort.indoor_humidity_max).toBe(70);
+  });
+
+  it('clamps ventilation_humidity_delta to 0…20', () => {
+    const hi = mergeConfig({ comfort: { ventilation_humidity_delta: 99 } });
+    expect(hi.comfort.ventilation_humidity_delta).toBe(20);
+    const lo = mergeConfig({ comfort: { ventilation_humidity_delta: -1 } });
+    expect(lo.comfort.ventilation_humidity_delta).toBe(0);
+  });
+
+  it('clamps cooling_temperature_delta to 0…20', () => {
+    const hi = mergeConfig({ comfort: { cooling_temperature_delta: 50 } });
+    expect(hi.comfort.cooling_temperature_delta).toBe(20);
+    const lo = mergeConfig({ comfort: { cooling_temperature_delta: -5 } });
+    expect(lo.comfort.cooling_temperature_delta).toBe(0);
+  });
+
+  it('clamps glazing_factor to 0…1', () => {
+    const hi = mergeConfig({ comfort: { glazing_factor: 5 } });
+    expect(hi.comfort.glazing_factor).toBe(1);
+    const lo = mergeConfig({ comfort: { glazing_factor: -0.1 } });
+    expect(lo.comfort.glazing_factor).toBe(0);
+  });
+
+  it('falls back to default for non-finite numeric comfort fields', () => {
+    const config = mergeConfig({
+      comfort: {
+        indoor_temperature_min: NaN,
+        indoor_temperature_max: Infinity,
+        ventilation_humidity_delta: NaN,
+        glazing_factor: NaN
+      }
+    });
+    expect(config.comfort.indoor_temperature_min).toBe(DEFAULT_COMFORT.indoor_temperature_min);
+    expect(config.comfort.indoor_temperature_max).toBe(DEFAULT_COMFORT.indoor_temperature_max);
+    expect(config.comfort.ventilation_humidity_delta).toBe(DEFAULT_COMFORT.ventilation_humidity_delta);
+    expect(config.comfort.glazing_factor).toBe(DEFAULT_COMFORT.glazing_factor);
+  });
+
+  it('does not affect other top-level config sections when only comfort changes', () => {
+    const config = mergeConfig({ comfort: { enabled: true, glazing_factor: 0.3 } });
+    expect(config.animation).toEqual(defaultConfig().animation);
+    expect(config.appearance).toEqual(defaultConfig().appearance);
+    expect(config.alerts).toEqual([]);
   });
 });

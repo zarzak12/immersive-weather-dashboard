@@ -23,6 +23,7 @@
 - [Metric / entity reference table](#metric--entity-reference-table)
 - [Environment zones (unlimited indoor/outdoor rooms and air quality)](#environment-zones-unlimited-indooroutdoor-rooms-and-air-quality)
 - [Visual alert / recommendation rules](#visual-alert--recommendation-rules)
+- [Comfort analysis (condensation risk)](#comfort-analysis-condensation-risk)
 - [Forecasts](#forecasts)
 - [Responsiveness, performance, accessibility, privacy](#responsiveness-performance-accessibility-privacy)
 - [Troubleshooting](#troubleshooting)
@@ -53,6 +54,7 @@ The result is a dashboard/wall-panel card that feels alive and reacts to your ac
 - Respects `prefers-reduced-motion`, pauses rendering when the card is scrolled off-screen or the browser tab is hidden, and caps the device pixel ratio to control GPU/CPU cost.
 - Animation quality and intensity controls so low-power wall tablets and Raspberry Pi displays stay smooth.
 - English and French interface, following `hass.locale.language`, with English fallback.
+- Optional **Comfort analysis** — an educational, display-only condensation risk panel (disabled by default). Computes dew point (Magnus formula), absolute humidity (g/m³), and condensation margin from outdoor readings and the selected indoor zone; shows fixed safe/warning/critical risk bands; supports an optional glazing or surface temperature sensor, or a configurable glazing-factor fallback estimate (default 0.15, explicitly labeled as an estimate). Technical values carry **educational tooltips** accessible by hover, keyboard focus, and touch/click.
 
 ## Requirements
 
@@ -98,6 +100,7 @@ HACS installs the single bundled file `dist/immersive-weather-dashboard.js` and 
 9. Open **Environment / Environnement** to add any number of indoor/outdoor zones (bedroom, living room, garage…) and manually map their temperature/humidity/air-quality entities.
 10. Open **Alerts / Alertes** to build your own visual recommendation rules (for example "Open the windows") from any numeric entities (see [Visual alert rules](#visual-alert--recommendation-rules)).
 11. Optionally click **Auto-configure** once you are happy with the automatic detections, to freeze them into the saved configuration (see [Auto-discovery](#auto-discovery-algorithm-and-manual-overrides)).
+12. Optionally open **Comfort / Confort** to enable the comfort panel: choose an indoor reference zone, optionally map a glazing or surface temperature sensor, and adjust the comfort ranges, ventilation delta, cooling delta and glazing factor (see [Comfort analysis](#comfort-analysis-condensation-risk)).
 
 ## Layout: scene viewport and information area
 
@@ -132,6 +135,7 @@ Everything below is configurable from the graphical editor. No YAML editing is r
 | Station metrics | Per metric: visible, custom label, custom color, custom icon, and a read-only "source" indicator (manual / weather attribute / sensor / not available) — manual entity overrides now live in the **Entity mapping** tab |
 | Environment / Environnement | Add/remove/reorder an unlimited number of zones; per zone: name, indoor/outdoor kind, visibility, manual entity mapping for temperature, humidity, AQI, CO₂, PM2.5, PM10 and VOC |
 | Alerts / Alertes | Add/remove visual recommendation rules; per rule: name, message, severity, all/any logic, enabled toggle, and one or more numeric conditions (entity, operator, threshold(s)) |
+| Comfort / Confort | Enable/disable the comfort panel; indoor zone selector (or first visible indoor zone when none selected); optional glazing/surface temperature sensor mapping; indoor temperature/RH ranges; glazing factor (default 0.15, range 0.0–1.0); ventilation absolute-humidity delta (default 2.0 g/m³, range 0.0–20.0 g/m³); cooling temperature delta |
 
 Two dedicated actions are always available:
 
@@ -238,11 +242,70 @@ With logic set to **all**, this rule becomes active — and shows a prominent re
 
 Since forecasts are no longer exposed as weather-entity state attributes in modern Home Assistant, the card subscribes to live forecast updates using the `weather/subscribe_forecast` WebSocket command, separately for `daily` and `hourly` forecast types. If your weather integration does not support a given forecast type, the subscription attempt is handled explicitly (not silently swallowed) and that section is simply hidden — you will not see a broken loading spinner. Subscriptions are automatically renewed if you change the weather entity or forecast settings, and cleanly unsubscribed when the card is removed or leaves the dashboard.
 
+## Comfort analysis (condensation risk)
+
+The **Comfort / Confort** tab adds an optional, display-only condensation risk analysis. It is **disabled by default** (`comfort.enabled: false`) and produces no display unless explicitly enabled — no YAML editing is required.
+
+### Inputs
+
+Two pairs of readings are required:
+
+- **Outdoor temperature and relative humidity** — resolved from the same sources as the outdoor station metrics (auto-detected or manually overridden in the **Entity mapping** tab).
+- **Indoor temperature and relative humidity** — taken from the zone explicitly selected in the **Comfort** tab, or, when none is selected, from the first visible indoor environment zone. Missing readings are marked unavailable rather than inferred.
+
+### Computed values
+
+All calculations run locally in the browser from current sensor readings:
+
+- **Dew point (°C / °F)** — computed from outdoor temperature and relative humidity using the Magnus formula.
+- **Absolute humidity (g/m³)** — computed for both indoor and outdoor air from their respective temperature and relative humidity values.
+- **Outdoor saturation distance (°C / °F)** — `outdoor_temp − dew_point`; a large positive value indicates the outdoor air is far from saturation.
+
+### Ventilation assessment
+
+Ventilation is assessed using **absolute humidity** (not relative humidity), because absolute humidity represents the actual mass of water vapor present regardless of air temperature. Ventilation is considered beneficial when the outdoor absolute humidity is lower than the indoor value by at least a configurable delta (default: **2.0 g/m³**, configurable from 0.0 to 20.0 g/m³).
+
+### Cooling assessment
+
+A separate cooling check evaluates whether opening windows would cool the space, based on configurable indoor and outdoor temperature thresholds.
+
+### Glazing / surface temperature (optional sensor or estimate)
+
+You may optionally map a **glazing or surface temperature sensor** (e.g. a contact thermometer on a window pane) in the Comfort tab. When mapped and available, that sensor reading is used directly as the surface temperature for the condensation margin calculation.
+
+When no sensor is mapped or the mapped sensor is unavailable, the card computes an **estimated surface temperature**: `indoor_temp + (outdoor_temp − indoor_temp) × glazing_factor`, where the glazing factor defaults to **0.15** and is configurable (range: 0.0–1.0). Indicative center-pane factors are 0.08–0.12 for high-performance glazing, 0.14–0.20 for modern double glazing, 0.25–0.40 for older double glazing and 0.60–0.75 for single glazing. Frames, pane edges, wind and installation can differ greatly. This is a simplified thermal model — the display explicitly labels the result as an **estimate, not a measurement**; use a surface sensor for reliable assessment.
+
+### Condensation margin and risk bands
+
+The **condensation margin** is `surface_temp − dew_point`. Three fixed bands are applied:
+
+| Margin | Band |
+| --- | --- |
+| ≤ 0 °C | 🔴 Critical — condensation likely |
+| > 0 °C and ≤ 3 °C | 🟡 Warning — surface near dew point |
+| > 3 °C | 🟢 Safe — positive condensation margin |
+
+### °F support and unavailable behavior
+
+All displayed temperatures are converted to °F when your Home Assistant locale uses imperial units; internal calculations always use °C. When a required reading is unavailable, the card clearly marks that data as unavailable and hides only the calculations that depend on it.
+
+The compact temperature, humidity and pressure cards also show a plain-language status. Pressure bands use the value converted to hPa (`< 1000` low, `1000–1025` normal, `> 1025` high). These weather bands are only meaningful for **sea-level-corrected pressure**; raw station pressure depends strongly on altitude.
+
+### Educational tooltips
+
+Each station, environment and computed value has a **? help control** with an educational tooltip explaining what the value means and, where applicable, how it is derived. Tooltips are triggered by:
+
+- **Hover** — mouse pointer over the **?** control
+- **Keyboard focus** — Tab to the **?** control; the explanation appears on focus
+- **Touch / click** — tap the **?** control on touch screens
+
+Tooltips convey explanatory information only. The Comfort analysis makes **no scientific or safety-precision claims** — it is an informational display tool, not a certified measurement instrument or professional advice of any kind.
+
 ## Responsiveness, performance, accessibility, privacy
 
 - **Responsive** — the scene viewport fills its container and adapts to phones, tablets, desktop cards and wall panels; on narrow/mobile screens the entire scene is shown first, followed by the full information area — nothing is hidden, only forecast rows may scroll horizontally. Panel density and font sizes adjust at small widths.
 - **Performance** — animation quality/intensity are configurable; the device pixel ratio used for canvases is capped at 2 to avoid excessive GPU/CPU load on high-DPI displays; rendering pauses automatically when the card scrolls off-screen (`IntersectionObserver`) or the browser tab is hidden (`visibilitychange`). The renderer's `ResizeObserver` stays attached to the scene viewport, so resizing/reconnecting the card (e.g. switching dashboards) keeps the animation correctly sized.
-- **Accessibility** — the renderer honors the operating system's `prefers-reduced-motion` setting: a single static frame is drawn instead of a continuous animation loop.
+- **Accessibility** — the renderer honors the operating system's `prefers-reduced-motion` setting: a single static frame is drawn instead of a continuous animation loop. Educational tooltip labels in the Comfort analysis panel are fully keyboard-reachable (Tab to focus, Space/Enter to expand) and respond to touch/tap — no pointer-only interactions.
 - **Privacy** — the card makes **no network calls of its own** at runtime beyond what your Home Assistant frontend already does (loading your configured house image and talking to your own Home Assistant instance). There is no telemetry, analytics, or third-party service involved in rendering the weather scene. Alert rules are evaluated **entirely locally in the browser**, only while the card is rendered — nothing is sent anywhere and no Home Assistant service/notification is ever triggered by them.
 
 ## Troubleshooting
@@ -272,6 +335,7 @@ Upgrading from v1.0.0 is **safe and requires no manual configuration changes**:
 - Visually, the card will look different immediately after updating: the scene becomes a smaller, unobstructed top viewport, and all metrics/forecasts move into a natural-flow information area below it that can make the overall card taller. `Appearance → Minimum height`/`Aspect ratio` now size the scene only; if your card looks too short or too tall, revisit those two settings.
 - No entity mapping is lost: any manual overrides you had configured for existing metrics keep working and are now edited from the new **Entity mapping** tab instead of the old inline selects on the **Station metrics** tab.
 - `environment_zones` and `alerts` start empty; nothing is auto-populated on your behalf, since zone/room assignment and alert thresholds are inherently specific to your home and are always manually configured.
+- `comfort.enabled` defaults to `false`; the comfort panel is never shown automatically and must be explicitly enabled in the **Comfort** tab — existing configurations without this section continue to work with the panel hidden.
 
 ## Development
 

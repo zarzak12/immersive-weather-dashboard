@@ -8,6 +8,7 @@ import type {
   AlertSeverity,
   AnimationConfig,
   AppearanceConfig,
+  ComfortConfig,
   EnvironmentZoneConfig,
   EnvironmentZoneEntityKey,
   EnvironmentZoneKind,
@@ -26,9 +27,9 @@ import { METRIC_CATALOG } from '../config/metrics';
 import { autoDetectSnapshot, pickWeatherEntity, resolveMetric, type ResolvedMetric } from '../data/entity-discovery';
 import { localize } from '../localize/localize';
 
-type TabId = 'data' | 'mapping' | 'image' | 'appearance' | 'forecast' | 'metrics' | 'environment' | 'alerts';
+type TabId = 'data' | 'mapping' | 'image' | 'appearance' | 'forecast' | 'metrics' | 'environment' | 'alerts' | 'comfort';
 
-const TABS: TabId[] = ['data', 'mapping', 'image', 'appearance', 'forecast', 'metrics', 'environment', 'alerts'];
+const TABS: TabId[] = ['data', 'mapping', 'image', 'appearance', 'forecast', 'metrics', 'environment', 'alerts', 'comfort'];
 
 interface EntitySuggestion {
   id: string;
@@ -87,6 +88,10 @@ export class ImmersiveWeatherDashboardEditor extends LitElement {
 
   private _updateForecast(partial: Partial<ForecastConfig>): void {
     this._updateRoot('forecast', { ...this._config.forecast, ...partial });
+  }
+
+  private _updateComfort(partial: Partial<ComfortConfig>): void {
+    this._updateRoot('comfort', { ...this._config.comfort, ...partial });
   }
 
   private _updateEntityOverride(key: MetricKey, entityId: string): void {
@@ -177,6 +182,7 @@ export class ImmersiveWeatherDashboardEditor extends LitElement {
         ${this._activeTab === 'metrics' ? this._renderMetricsTab() : nothing}
         ${this._activeTab === 'environment' ? this._renderEnvironmentTab() : nothing}
         ${this._activeTab === 'alerts' ? this._renderAlertsTab() : nothing}
+        ${this._activeTab === 'comfort' ? this._renderComfortTab() : nothing}
       </div>
       <div class="actions">
         <button class="secondary" @click=${this._resetDefaults}>${this._t('editor.reset_defaults')}</button>
@@ -818,6 +824,94 @@ export class ImmersiveWeatherDashboardEditor extends LitElement {
         <button class="clear" @click=${() => this._removeCondition(ruleId, condition.id)}>${this._t('editor.remove_condition')}</button>
         ${invalid ? html`<p class="mapping-error">${this._t('validation.entity_not_found', { entity: condition.entity_id })}</p>` : nothing}
       </div>
+    `;
+  }
+
+  private _renderComfortTab() {
+    const comfort = this._config.comfort;
+    const indoorZones = this._config.environment_zones.filter(z => z.kind === 'indoor');
+    const surfaceValue = comfort.surface_temperature_entity ?? '';
+    const listId = 'comfort-surface-entity-list';
+    const suggestions = this._entitySuggestions(['sensor']);
+    const surfaceInvalid = Boolean(surfaceValue && this.hass && !this.hass.states[surfaceValue]);
+
+    return html`
+      <p class="helper">${this._t('editor.comfort_helper')}</p>
+      <p class="helper">${this._t('editor.comfort_disclaimer')}</p>
+
+      <label class="checkbox">
+        <input type="checkbox"
+          .checked=${comfort.enabled}
+          @change=${(e: Event) => this._updateComfort({ enabled: (e.target as HTMLInputElement).checked })}
+        />
+        ${this._t('editor.comfort_enabled')}
+      </label>
+
+      <label>${this._t('editor.comfort_indoor_zone')}</label>
+      <select @change=${(e: Event) => this._updateComfort({ indoor_zone: (e.target as HTMLSelectElement).value })}>
+        <option value="" ?selected=${!comfort.indoor_zone}>— ${this._t('editor.comfort_indoor_zone_helper')} —</option>
+        ${indoorZones.map(z => html`<option value=${z.id} ?selected=${z.id === comfort.indoor_zone}>${z.name || z.id}</option>`)}
+      </select>
+      <p class="helper">${this._t('editor.comfort_indoor_zone_helper')}</p>
+
+      <label>${this._t('editor.comfort_surface_entity')}</label>
+      <div class="mapping-controls">
+        <input type="text" list=${listId}
+          placeholder=${this._t('editor.mapping_placeholder')}
+          .value=${surfaceValue}
+          @change=${(e: Event) => this._updateComfort({ surface_temperature_entity: (e.target as HTMLInputElement).value.trim() || undefined })}
+        />
+        <datalist id=${listId}>${suggestions.map(s => html`<option value=${s.id}>${s.label}</option>`)}</datalist>
+        <button class="clear" ?disabled=${!surfaceValue}
+          @click=${() => this._updateComfort({ surface_temperature_entity: undefined })}>
+          ${this._t('editor.clear_override')}
+        </button>
+      </div>
+      ${surfaceInvalid ? html`<p class="mapping-error">${this._t('editor.comfort_surface_invalid')}</p>` : nothing}
+      <p class="helper">${this._t('editor.comfort_surface_entity_helper')}</p>
+
+      <label>${this._t('editor.comfort_temperature_min')}: ${comfort.indoor_temperature_min} °C</label>
+      <input type="range" min="-10" max="40" step="0.5"
+        .value=${String(comfort.indoor_temperature_min)}
+        @input=${(e: Event) => { const v = Number((e.target as HTMLInputElement).value); if (Number.isFinite(v)) this._updateComfort({ indoor_temperature_min: v }); }}
+      />
+
+      <label>${this._t('editor.comfort_temperature_max')}: ${comfort.indoor_temperature_max} °C</label>
+      <input type="range" min="-10" max="40" step="0.5"
+        .value=${String(comfort.indoor_temperature_max)}
+        @input=${(e: Event) => { const v = Number((e.target as HTMLInputElement).value); if (Number.isFinite(v)) this._updateComfort({ indoor_temperature_max: v }); }}
+      />
+
+      <label>${this._t('editor.comfort_humidity_min')}: ${comfort.indoor_humidity_min} %</label>
+      <input type="range" min="0" max="100" step="1"
+        .value=${String(comfort.indoor_humidity_min)}
+        @input=${(e: Event) => { const v = Number((e.target as HTMLInputElement).value); if (Number.isFinite(v)) this._updateComfort({ indoor_humidity_min: v }); }}
+      />
+
+      <label>${this._t('editor.comfort_humidity_max')}: ${comfort.indoor_humidity_max} %</label>
+      <input type="range" min="0" max="100" step="1"
+        .value=${String(comfort.indoor_humidity_max)}
+        @input=${(e: Event) => { const v = Number((e.target as HTMLInputElement).value); if (Number.isFinite(v)) this._updateComfort({ indoor_humidity_max: v }); }}
+      />
+
+      <label>${this._t('editor.comfort_ventilation_delta')}: ${comfort.ventilation_humidity_delta} g/m³</label>
+      <input type="range" min="0" max="20" step="0.5"
+        .value=${String(comfort.ventilation_humidity_delta)}
+        @input=${(e: Event) => { const v = Number((e.target as HTMLInputElement).value); if (Number.isFinite(v)) this._updateComfort({ ventilation_humidity_delta: v }); }}
+      />
+
+      <label>${this._t('editor.comfort_cooling_delta')}: ${comfort.cooling_temperature_delta} °C</label>
+      <input type="range" min="0" max="20" step="0.5"
+        .value=${String(comfort.cooling_temperature_delta)}
+        @input=${(e: Event) => { const v = Number((e.target as HTMLInputElement).value); if (Number.isFinite(v)) this._updateComfort({ cooling_temperature_delta: v }); }}
+      />
+
+      <label>${this._t('editor.comfort_glazing_factor')}: ${comfort.glazing_factor}</label>
+      <input type="range" min="0" max="1" step="0.01"
+        .value=${String(comfort.glazing_factor)}
+        @input=${(e: Event) => { const v = Number((e.target as HTMLInputElement).value); if (Number.isFinite(v)) this._updateComfort({ glazing_factor: v }); }}
+      />
+      <p class="helper">${this._t('editor.comfort_glazing_factor_helper')}</p>
     `;
   }
 

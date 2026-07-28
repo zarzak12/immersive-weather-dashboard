@@ -2,6 +2,7 @@ import type {
   AlertRuleConfig,
   AnimationConfig,
   AppearanceConfig,
+  ComfortConfig,
   EnvironmentZoneConfig,
   EnvironmentZoneEntities,
   ForecastConfig,
@@ -51,6 +52,29 @@ export const DEFAULT_FORECAST: ForecastConfig = {
   daily_count: 5
 };
 
+/**
+ * Comfort feature defaults.
+ *
+ * Clamp ranges applied during mergeConfig:
+ *   indoor_temperature_min/max  → −10 … 40 °C  (min ≤ max, swapped when inverted)
+ *   indoor_humidity_min/max     → 0 … 100 %     (min ≤ max, swapped when inverted)
+ *   ventilation_humidity_delta  → 0 … 20 g/m³
+ *   cooling_temperature_delta   → 0 … 20 °C
+ *   glazing_factor              → 0 … 1
+ */
+export const DEFAULT_COMFORT: ComfortConfig = {
+  enabled: false,
+  indoor_zone: '',
+  surface_temperature_entity: undefined,
+  indoor_temperature_min: 18,
+  indoor_temperature_max: 26,
+  indoor_humidity_min: 30,
+  indoor_humidity_max: 60,
+  ventilation_humidity_delta: 2,
+  cooling_temperature_delta: 3,
+  glazing_factor: 0.15
+};
+
 export function defaultMetrics(): MetricConfig[] {
   return METRIC_KEYS.map((key, index) => ({
     key,
@@ -72,7 +96,8 @@ export function defaultConfig(): ImmersiveWeatherCardConfig {
     forecast: { ...DEFAULT_FORECAST },
     metrics: defaultMetrics(),
     environment_zones: [],
-    alerts: []
+    alerts: [],
+    comfort: { ...DEFAULT_COMFORT }
   };
 }
 
@@ -207,6 +232,49 @@ function mergeAlerts(input: PartialAlertRuleConfig[] | undefined): AlertRuleConf
 }
 
 /**
+ * Normalizes partial comfort config against defaults.
+ * Invalid or inverted min/max pairs are safely swapped; all numeric fields
+ * are clamped to documented ranges; unknown string fields fall back to defaults.
+ */
+function mergeComfort(input: Partial<ComfortConfig> | undefined): ComfortConfig {
+  if (!input) return { ...DEFAULT_COMFORT };
+
+  let tempMin = isFiniteNumber(input.indoor_temperature_min)
+    ? Math.min(40, Math.max(-10, input.indoor_temperature_min))
+    : DEFAULT_COMFORT.indoor_temperature_min;
+  let tempMax = isFiniteNumber(input.indoor_temperature_max)
+    ? Math.min(40, Math.max(-10, input.indoor_temperature_max))
+    : DEFAULT_COMFORT.indoor_temperature_max;
+  if (tempMin > tempMax) [tempMin, tempMax] = [tempMax, tempMin];
+
+  let humMin = isFiniteNumber(input.indoor_humidity_min)
+    ? Math.min(100, Math.max(0, input.indoor_humidity_min))
+    : DEFAULT_COMFORT.indoor_humidity_min;
+  let humMax = isFiniteNumber(input.indoor_humidity_max)
+    ? Math.min(100, Math.max(0, input.indoor_humidity_max))
+    : DEFAULT_COMFORT.indoor_humidity_max;
+  if (humMin > humMax) [humMin, humMax] = [humMax, humMin];
+
+  const surfaceEntity =
+    typeof input.surface_temperature_entity === 'string' && input.surface_temperature_entity.length > 0
+      ? input.surface_temperature_entity
+      : undefined;
+
+  return {
+    enabled: typeof input.enabled === 'boolean' ? input.enabled : DEFAULT_COMFORT.enabled,
+    indoor_zone: typeof input.indoor_zone === 'string' ? input.indoor_zone : DEFAULT_COMFORT.indoor_zone,
+    surface_temperature_entity: surfaceEntity,
+    indoor_temperature_min: tempMin,
+    indoor_temperature_max: tempMax,
+    indoor_humidity_min: humMin,
+    indoor_humidity_max: humMax,
+    ventilation_humidity_delta: boundedNumber(input.ventilation_humidity_delta, 0, 20, DEFAULT_COMFORT.ventilation_humidity_delta),
+    cooling_temperature_delta: boundedNumber(input.cooling_temperature_delta, 0, 20, DEFAULT_COMFORT.cooling_temperature_delta),
+    glazing_factor: boundedNumber(input.glazing_factor, 0, 1, DEFAULT_COMFORT.glazing_factor)
+  };
+}
+
+/**
  * Merges a partial/legacy configuration with defaults so older or hand-written
  * configs keep rendering safely after upgrades.
  */
@@ -226,6 +294,7 @@ export function mergeConfig(input: PartialImmersiveWeatherCardConfig | undefined
     forecast: { ...base.forecast, ...(input.forecast ?? {}) },
     metrics: mergeMetrics(input.metrics),
     environment_zones: mergeEnvironmentZones(input.environment_zones),
-    alerts: mergeAlerts(input.alerts)
+    alerts: mergeAlerts(input.alerts),
+    comfort: mergeComfort(input.comfort)
   };
 }

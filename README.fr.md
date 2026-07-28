@@ -23,6 +23,7 @@
 - [Tableau de référence des indicateurs / entités](#tableau-de-référence-des-indicateurs--entités)
 - [Zones environnementales (pièces intérieures/extérieures illimitées et qualité de l'air)](#zones-environnementales-pièces-intérieuresextérieures-illimitées-et-qualité-de-lair)
 - [Règles d'alerte / recommandation visuelle](#règles-dalerte--recommandation-visuelle)
+- [Analyse confort (risque de condensation)](#analyse-confort-risque-de-condensation)
 - [Prévisions](#prévisions)
 - [Réactivité, performance, accessibilité, confidentialité](#réactivité-performance-accessibilité-confidentialité)
 - [Dépannage](#dépannage)
@@ -53,6 +54,7 @@ Le résultat est une carte de tableau de bord/écran mural qui semble vivante et
 - Respecte le réglage système `prefers-reduced-motion`, met le rendu en pause lorsque la carte n'est plus visible à l'écran ou que l'onglet du navigateur est masqué, et plafonne la densité de pixels de l'appareil pour maîtriser le coût GPU/CPU.
 - Contrôles de qualité et d'intensité d'animation pour que les tablettes murales peu puissantes et les écrans Raspberry Pi restent fluides.
 - Interface en anglais et en français, suivant `hass.locale.language`, avec repli sur l'anglais.
+- **Analyse confort** optionnelle — un panneau d'analyse du risque de condensation purement d'affichage (désactivé par défaut). Calcule le point de rosée (formule de Magnus), l'humidité absolue (g/m³) et la marge de condensation à partir des relevés extérieurs et de la zone intérieure sélectionnée ; affiche des niveaux de risque fixes sûr/avertissement/critique ; prend en charge un capteur de vitrage ou de surface facultatif, ou un facteur de vitrage configurable par défaut (0,15) explicitement affiché comme **estimation**. Les valeurs techniques disposent d'une **infobulle éducative** accessible par survol, focus clavier et toucher/clic.
 
 ## Prérequis
 
@@ -98,6 +100,7 @@ HACS installe le fichier unique `dist/immersive-weather-dashboard.js` et enregis
 9. Ouvrez **Environnement** pour ajouter autant de zones intérieures/extérieures que vous le souhaitez (chambre, salon, garage…) et associer manuellement leurs entités de température/humidité/qualité de l'air.
 10. Ouvrez **Alertes** pour créer vos propres règles de recommandation visuelle (par exemple « Ouvrez les fenêtres ») à partir de n'importe quelles entités numériques (voir [Règles d'alerte visuelles](#règles-dalerte--recommandation-visuelle)).
 11. Cliquez éventuellement sur **Configuration automatique** une fois satisfait des détections automatiques, pour les figer dans la configuration enregistrée (voir [Détection automatique](#algorithme-de-détection-automatique-et-remplacements-manuels)).
+12. Ouvrez éventuellement **Confort** pour activer le panneau : choisissez une zone intérieure de référence, associez facultativement un capteur de température de vitrage ou de surface, puis ajustez les plages de confort, les deltas de ventilation/refroidissement et le facteur de vitrage (voir [Analyse confort](#analyse-confort-risque-de-condensation)).
 
 ## Mise en page : scène et zone d'informations
 
@@ -132,6 +135,7 @@ Tout ce qui suit est configurable depuis l'éditeur graphique. Aucune édition Y
 | Indicateurs météo | Par indicateur : visible, libellé personnalisé, couleur personnalisée, icône personnalisée, et un indicateur de « source » en lecture seule (manuelle / attribut météo / capteur / non disponible) — les remplacements manuels vivent désormais dans l'onglet **Association des entités** |
 | Environnement | Ajouter/supprimer/réordonner un nombre illimité de zones ; par zone : nom, type intérieur/extérieur, visibilité, association manuelle d'entités pour température, humidité, AQI, CO₂, PM2.5, PM10 et COV |
 | Alertes | Ajouter/supprimer des règles de recommandation visuelle ; par règle : nom, message, sévérité, logique tout/au moins un, bascule activé/désactivé, et une ou plusieurs conditions numériques (entité, opérateur, seuil(s)) |
+| Confort | Activer/désactiver le panneau ; sélecteur de zone intérieure (ou première zone intérieure visible) ; capteur de température de vitrage/surface optionnel ; plages de température/humidité intérieures ; facteur de vitrage (par défaut 0,15, plage 0,0–1,0) ; delta d'humidité absolue pour la ventilation (par défaut 2,0 g/m³, plage 0,0–20,0 g/m³) ; delta de température pour le refroidissement |
 
 Deux actions dédiées sont toujours disponibles :
 
@@ -238,11 +242,70 @@ Avec la logique réglée sur **toutes**, cette règle ne devient active — et n
 
 Les prévisions n'étant plus exposées comme attributs d'état des entités météo dans les versions récentes de Home Assistant, la carte s'abonne aux mises à jour de prévisions en direct via la commande WebSocket `weather/subscribe_forecast`, séparément pour les types `daily` et `hourly`. Si votre intégration météo ne prend pas en charge un type de prévision donné, la tentative d'abonnement est gérée explicitement (pas silencieusement ignorée) et la section correspondante est simplement masquée — vous ne verrez pas de chargement bloqué indéfiniment. Les abonnements sont automatiquement renouvelés si vous changez d'entité météo ou de réglages de prévisions, et proprement résiliés lorsque la carte est retirée ou quitte le tableau de bord.
 
+## Analyse confort (risque de condensation)
+
+L'onglet **Confort** ajoute une analyse optionnelle, purement d'affichage, du risque de condensation. Elle est **désactivée par défaut** (`comfort.enabled: false`) et ne produit aucun affichage tant qu'elle n'est pas explicitement activée — aucune édition YAML n'est nécessaire.
+
+### Données d'entrée
+
+Deux paires de relevés sont nécessaires :
+
+- **Température et humidité relative extérieures** — résolues depuis les mêmes sources que les indicateurs de la station extérieure (détection automatique ou remplacement manuel dans l'onglet **Association des entités**).
+- **Température et humidité relative intérieures** — issues de la zone explicitement sélectionnée dans l'onglet **Confort**, ou, à défaut, de la première zone environnementale intérieure visible. Les relevés manquants sont signalés comme indisponibles plutôt que déduits.
+
+### Valeurs calculées
+
+Tous les calculs s'exécutent localement dans le navigateur à partir des relevés courants :
+
+- **Point de rosée (°C / °F)** — calculé à partir de la température et de l'humidité relative extérieures à l'aide de la formule de Magnus.
+- **Humidité absolue (g/m³)** — calculée pour l'air intérieur et extérieur à partir de leurs températures et humidités relatives respectives.
+- **Distance de saturation extérieure (°C / °F)** — `température_ext − point_de_rosée` ; une valeur positive élevée indique que l'air extérieur est loin de la saturation.
+
+### Évaluation de la ventilation
+
+La ventilation est évaluée à partir de l'**humidité absolue** (et non de l'humidité relative), car elle représente la masse réelle de vapeur d'eau quelle que soit la température de l'air. La ventilation est considérée comme bénéfique lorsque l'humidité absolue extérieure est inférieure à la valeur intérieure d'au moins un delta configurable (par défaut : **2,0 g/m³**, réglable de 0,0 à 20,0 g/m³).
+
+### Évaluation du refroidissement
+
+Une vérification séparée évalue si l'ouverture des fenêtres permettrait de rafraîchir l'espace, sur la base de seuils de température intérieure et extérieure configurables.
+
+### Température de vitrage / de surface (capteur optionnel ou estimation)
+
+Vous pouvez éventuellement associer un **capteur de température de vitrage ou de surface** (par exemple un thermomètre à contact sur une vitre) dans l'onglet Confort. Lorsqu'il est associé et disponible, ce relevé est utilisé directement comme température de surface pour le calcul de la marge de condensation.
+
+Lorsqu'aucun capteur n'est associé ou que le capteur associé est indisponible, la carte calcule une **température de surface estimée** : `temp_intérieure + (temp_extérieure − temp_intérieure) × facteur_vitrage`, où le facteur de vitrage vaut par défaut **0,15** et est configurable (plage : 0,0–1,0). Les facteurs indicatifs au centre du vitrage sont de 0,08–0,12 pour un vitrage haute performance, 0,14–0,20 pour un double vitrage moderne, 0,25–0,40 pour un ancien double vitrage et 0,60–0,75 pour un simple vitrage. Les cadres, bords de vitre, le vent et la pose peuvent fortement varier. Il s'agit d'un modèle thermique simplifié — le résultat est explicitement affiché comme une **estimation, et non une mesure** ; utilisez un capteur de surface pour une évaluation fiable.
+
+### Marge de condensation et niveaux de risque
+
+La **marge de condensation** est égale à `temp_surface − point_de_rosée`. Trois niveaux fixes sont appliqués :
+
+| Marge | Niveau |
+| --- | --- |
+| ≤ 0 °C | 🔴 Critique — condensation probable |
+| > 0 °C et ≤ 3 °C | 🟡 Avertissement — surface proche du point de rosée |
+| > 3 °C | 🟢 Sûr — marge de condensation positive |
+
+### Support °F et comportement en cas d'indisponibilité
+
+Toutes les températures affichées sont converties en °F lorsque vos paramètres régionaux Home Assistant utilisent le système impérial ; les calculs internes utilisent toujours des °C. Lorsqu'un relevé requis est indisponible, la carte le signale clairement et masque uniquement les calculs qui en dépendent.
+
+Les cartes compactes de température, d'humidité et de pression affichent également un état compréhensible. Les niveaux de pression utilisent la valeur convertie en hPa (`< 1000` basse, `1000–1025` normale, `> 1025` haute). Ces niveaux météorologiques ne sont pertinents qu'avec une **pression corrigée au niveau de la mer** ; la pression brute de la station dépend fortement de l'altitude.
+
+### Infobulles éducatives
+
+Chaque donnée de station, d'environnement ou calculée dispose d'un **bouton d'aide ?** avec une infobulle éducative expliquant sa signification et, si nécessaire, son calcul. Les infobulles sont déclenchées par :
+
+- **Survol** — pointeur de la souris sur le bouton **?**
+- **Focus clavier** — Tab jusqu'au bouton **?** ; l'explication apparaît au focus
+- **Toucher / clic** — appui sur le bouton **?** sur les écrans tactiles
+
+Les infobulles ne contiennent que des informations explicatives. L'analyse confort ne formule **aucune affirmation de précision scientifique ou de sécurité** — c'est un outil d'affichage informatif, et non un instrument certifié ni un conseil professionnel de quelque nature que ce soit.
+
 ## Réactivité, performance, accessibilité, confidentialité
 
 - **Réactivité** — le viewport de la scène remplit son conteneur et s'adapte aux smartphones, tablettes, cartes de bureau et écrans muraux ; sur les petits écrans/mobiles, toute la scène est affichée en premier, suivie de l'intégralité de la zone d'informations — rien n'est masqué, seules les lignes de prévisions peuvent défiler horizontalement. La densité des panneaux et la taille des polices s'ajustent sur les petites largeurs.
 - **Performance** — la qualité et l'intensité de l'animation sont configurables ; la densité de pixels de l'appareil utilisée pour les canevas est plafonnée à 2 pour éviter une charge GPU/CPU excessive sur les écrans haute densité ; le rendu est automatiquement mis en pause lorsque la carte défile hors de l'écran (`IntersectionObserver`) ou que l'onglet du navigateur est masqué (`visibilitychange`). Le `ResizeObserver` du moteur de rendu reste attaché au viewport de la scène, si bien que redimensionner/reconnecter la carte (par exemple en changeant de tableau de bord) conserve une animation correctement dimensionnée.
-- **Accessibilité** — le moteur de rendu respecte le réglage système `prefers-reduced-motion` : une seule image statique est dessinée au lieu d'une boucle d'animation continue.
+- **Accessibilité** — le moteur de rendu respecte le réglage système `prefers-reduced-motion` : une seule image statique est dessinée au lieu d'une boucle d'animation continue. Les libellés des infobulles éducatives du panneau d'analyse confort sont entièrement accessibles au clavier (Tab pour le focus, Espace/Entrée pour ouvrir) et répondent au toucher/clic — aucune interaction réservée au pointeur.
 - **Confidentialité** — la carte n'effectue **aucun appel réseau propre** au moment de l'exécution, en dehors de ce que votre frontend Home Assistant fait déjà (charger l'image de maison configurée et dialoguer avec votre propre instance Home Assistant). Aucune télémétrie, aucun outil d'analyse, aucun service tiers n'intervient dans le rendu de la scène météo. Les règles d'alerte sont évaluées **entièrement en local dans le navigateur**, uniquement pendant que la carte est affichée — rien n'est envoyé nulle part et aucun service/notification Home Assistant n'est jamais déclenché par elles.
 
 ## Dépannage
@@ -272,6 +335,7 @@ La mise à jour depuis la v1.0.0 est **sûre et ne nécessite aucune modificatio
 - Visuellement, la carte paraîtra différente immédiatement après la mise à jour : la scène devient un viewport plus petit et dégagé en haut, et tous les indicateurs/prévisions se déplacent dans une zone d'informations en flux normal en dessous, ce qui peut rendre la carte globalement plus haute. `Apparence → Hauteur minimale`/`Ratio d'aspect` ne dimensionnent désormais que la scène ; si votre carte paraît trop courte ou trop haute, revoyez ces deux réglages.
 - Aucune association d'entité n'est perdue : tous les remplacements manuels que vous aviez configurés pour les indicateurs existants continuent de fonctionner et se modifient désormais depuis le nouvel onglet **Association des entités** plutôt que depuis les anciens menus déroulants intégrés à l'onglet **Indicateurs météo**.
 - `environment_zones` et `alerts` démarrent vides ; rien n'est préconfiguré automatiquement à votre place, car l'attribution des zones/pièces et les seuils d'alerte sont par nature propres à votre logement et toujours configurés manuellement.
+- `comfort.enabled` vaut par défaut `false` ; le panneau de confort n'est jamais affiché automatiquement et doit être explicitement activé dans l'onglet **Confort** — les configurations existantes sans cette section continuent de fonctionner avec le panneau masqué.
 
 ## Développement
 

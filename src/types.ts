@@ -180,6 +180,48 @@ export type PartialAlertRuleConfig = Partial<Omit<AlertRuleConfig, 'conditions'>
   conditions?: PartialAlertConditionConfig[];
 };
 
+/**
+ * Comfort monitoring configuration.
+ *
+ * All temperature values are in °C, humidity in %, absolute humidity in g/m³.
+ * Disabled by default; enabled individually per card config.
+ */
+export interface ComfortConfig {
+  /** Feature flag — false by default. */
+  enabled: boolean;
+  /**
+   * Zone id of the indoor zone to source temperature/humidity from.
+   * Empty string means "first visible indoor zone".
+   */
+  indoor_zone: string;
+  /** Optional entity id for a surface (e.g. window) temperature sensor. */
+  surface_temperature_entity?: string;
+  /** Lower bound of the comfortable indoor temperature range (°C). */
+  indoor_temperature_min: number;
+  /** Upper bound of the comfortable indoor temperature range (°C). */
+  indoor_temperature_max: number;
+  /** Lower bound of the comfortable indoor relative humidity range (%). */
+  indoor_humidity_min: number;
+  /** Upper bound of the comfortable indoor relative humidity range (%). */
+  indoor_humidity_max: number;
+  /**
+   * Minimum absolute-humidity difference (g/m³) between indoor and outdoor
+   * air required to trigger a ventilation recommendation.
+   */
+  ventilation_humidity_delta: number;
+  /**
+   * Minimum temperature difference (°C) between indoor and outdoor air
+   * required to trigger a cooling recommendation.
+   */
+  cooling_temperature_delta: number;
+  /**
+   * Fraction of the outdoor–indoor temperature difference subtracted from
+   * the indoor temperature to estimate the window-surface temperature when
+   * no surface_temperature_entity is provided.  Range 0–1, default 0.15.
+   */
+  glazing_factor: number;
+}
+
 export interface ImmersiveWeatherCardConfig {
   type: string;
   title?: string;
@@ -193,12 +235,13 @@ export interface ImmersiveWeatherCardConfig {
   metrics: MetricConfig[];
   environment_zones: EnvironmentZoneConfig[];
   alerts: AlertRuleConfig[];
+  comfort: ComfortConfig;
 }
 
 export type PartialImmersiveWeatherCardConfig = Partial<
   Omit<
     ImmersiveWeatherCardConfig,
-    'entities' | 'animation' | 'scene' | 'appearance' | 'forecast' | 'metrics' | 'environment_zones' | 'alerts'
+    'entities' | 'animation' | 'scene' | 'appearance' | 'forecast' | 'metrics' | 'environment_zones' | 'alerts' | 'comfort'
   >
 > & {
   entities?: ManualEntityMap;
@@ -209,6 +252,7 @@ export type PartialImmersiveWeatherCardConfig = Partial<
   metrics?: Partial<MetricConfig>[];
   environment_zones?: PartialEnvironmentZoneConfig[];
   alerts?: PartialAlertRuleConfig[];
+  comfort?: Partial<ComfortConfig>;
 };
 
 export interface LovelaceCardConfig {

@@ -29,6 +29,16 @@ import {
   formatTime,
   formatWeekday
 } from './data/format';
+import {
+  absoluteHumidity,
+  condensationAnalysis,
+  coolingRecommendation,
+  dewPoint,
+  saturationDistance,
+  toCelsius,
+  toHectopascals,
+  ventilationRecommendation
+} from './data/comfort';
 import { conditionToScene, isDaytime } from './data/weather-condition';
 import { localize } from './localize/localize';
 import { SceneRenderer, type SceneState } from './rendering/scene-renderer';
@@ -115,6 +125,7 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     rows += 1; // title + current condition overlay
     if (this._config.alerts.some((rule) => rule.enabled)) rows += 1;
     if (this._config.metrics.some((metric) => metric.visible)) rows += 2;
+    if (this._config.comfort?.enabled) rows += 4;
     const visibleZones = this._config.environment_zones.filter((zone) => zone.visible).length;
     if (visibleZones > 0) rows += Math.ceil(visibleZones / 2) * 2;
     if (this._config.forecast.show_hourly) rows += 2;
@@ -393,6 +404,7 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
           ${!weatherEntityId ? html`<div class="panel notice">${localize(language, 'card.no_weather_entity')}</div>` : nothing}
           ${activeAlerts.length ? this._renderAlerts(activeAlerts, language) : nothing}
           ${this._renderMetrics(resolvedMetrics, language)}
+          ${this._config.comfort?.enabled ? this._renderComfort(resolvedMetrics, language) : nothing}
           ${this._renderZones(language)}
           ${weatherEntityId ? this._renderForecast(language) : nothing}
           ${issues.length
@@ -454,7 +466,7 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
               <div class="metric">
                 <ha-icon icon=${metric.icon || METRIC_CATALOG[metric.key].defaultIcon}
                   style=${metric.color ? `color:${metric.color}` : ''}></ha-icon>
-                <span class="metric-label">${metric.label || localize(language, `metrics.${metric.key}`)}</span>
+                <span class="metric-label">${metric.label || localize(language, `metrics.${metric.key}`)}${this._renderHelp(`metrics.${metric.key}`, language)}</span>
                 <span class="metric-value">${this._formatMetricValue(metric.key, resolved.value, resolved.unit, language)}</span>
               </div>
             `
@@ -494,7 +506,7 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     return html`
       <div class="zone-row">
         <ha-icon icon=${ZONE_ENTITY_ICON[key]}></ha-icon>
-        <span class="zone-label">${localize(language, `zone_metric.${key}`)}</span>
+        <span class="zone-label">${localize(language, `zone_metric.${key}`)}${this._renderHelp(`zone_metric.${key}`, language)}</span>
         <span class="zone-value">${value}</span>
         ${unavailable
           ? html`<span class="zone-warning" title=${localize(language, 'zone.entity_unavailable', { entity: entityId })}>
@@ -547,12 +559,314 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     `;
   }
 
+  private _renderHelp(topic: string, language: string) {
+    return html`
+      <span class="help-wrap">
+        <button
+          class="help-btn"
+          type="button"
+          aria-label=${localize(language, 'comfort.tooltip_aria_label', { topic: localize(language, `help.${topic}`) })}
+          title=${localize(language, `help.${topic}`)}
+          @click=${(e: Event) => { e.stopPropagation(); }}
+        >?</button>
+        <span class="help-tip" role="tooltip">${localize(language, `help.${topic}`)}</span>
+      </span>
+    `;
+  }
+
+  private _comfortCard(icon: string, label: string, value: string, tag: string | undefined, helpKey: string | undefined, language: string) {
+    return html`
+      <div class="comfort-card">
+        <ha-icon icon=${icon}></ha-icon>
+        <span class="comfort-card-label">${label}</span>
+        <span class="comfort-card-value">${value}</span>
+        ${tag ? html`<span class="comfort-tag">${tag}</span>` : nothing}
+        ${helpKey ? this._renderHelp(helpKey, language) : nothing}
+      </div>
+    `;
+  }
+
+  private _comfortInsight(icon: string, text: string, value: string | undefined, statusClass: string, helpKey: string | undefined, language: string) {
+    return html`
+      <div class="comfort-insight status-${statusClass}">
+        <ha-icon class="comfort-insight-icon" icon=${icon}></ha-icon>
+        <span class="comfort-insight-text">${text}</span>
+        ${value ? html`<span class="comfort-insight-value">${value}</span>` : nothing}
+        ${helpKey ? this._renderHelp(helpKey, language) : nothing}
+      </div>
+    `;
+  }
+
+  private _renderComfort(resolved: Record<MetricKey, ResolvedMetric> | undefined, language: string) {
+    if (!this.hass || !resolved) return nothing;
+
+    const comfort = this._config.comfort;
+    if (!comfort) return nothing;
+
+    // Step 1: Resolve outdoor data
+    const outdoorTempResolved = resolved.outdoor_temperature;
+    const outdoorRHResolved = resolved.humidity;
+
+    const outdoorTempVal = Number(outdoorTempResolved?.value);
+    const outdoorTempUnit = outdoorTempResolved?.unit ?? this.hass.config.unit_system.temperature ?? '°C';
+    const outdoorTempC = Number.isFinite(outdoorTempVal) ? toCelsius(outdoorTempVal, outdoorTempUnit) : undefined;
+
+    const outdoorRHVal = Number(outdoorRHResolved?.value);
+    const outdoorRH = Number.isFinite(outdoorRHVal) && outdoorRHVal > 0 && outdoorRHVal <= 100 ? outdoorRHVal : undefined;
+
+    const outdoorPressureValue = Number(resolved.pressure?.value);
+    const outdoorPressure = resolved.pressure?.source !== 'none' && Number.isFinite(outdoorPressureValue)
+      ? outdoorPressureValue
+      : undefined;
+    const outdoorPressureUnit = resolved.pressure?.unit ?? this.hass.config.unit_system.pressure;
+    const outdoorPressureHpa = outdoorPressure !== undefined && outdoorPressureUnit
+      ? toHectopascals(outdoorPressure, outdoorPressureUnit)
+      : undefined;
+
+    // Outdoor dew point: try measured first, then calculated
+    const outdoorDPResolvedVal = Number(resolved.dew_point?.value);
+    const outdoorDPMeasured = resolved.dew_point?.source !== 'none' && Number.isFinite(outdoorDPResolvedVal) ? outdoorDPResolvedVal : undefined;
+    const outdoorDPCalcC = (outdoorTempC !== undefined && outdoorRH !== undefined) ? dewPoint(outdoorTempC, outdoorRH) : undefined;
+
+    // Step 2: Get indoor zone
+    const indoorZones = this._config.environment_zones.filter(z => z.kind === 'indoor');
+    const indoorZone = comfort.indoor_zone ? indoorZones.find(z => z.id === comfort.indoor_zone) : undefined;
+    const zone = indoorZone ?? indoorZones.find(z => z.visible);
+
+    let indoorTempC: number | undefined;
+    let indoorRH: number | undefined;
+    let indoorTempDisplay: string | undefined;
+
+    if (zone) {
+      const indoorTempEntityId = zone.entities.temperature;
+      const indoorRHEntityId = zone.entities.humidity;
+      const indoorTempEntity = indoorTempEntityId ? this.hass.states[indoorTempEntityId] : undefined;
+      const indoorRHEntity = indoorRHEntityId ? this.hass.states[indoorRHEntityId] : undefined;
+
+      const indoorTempVal = indoorTempEntity && !isUnavailable(indoorTempEntity) ? Number(indoorTempEntity.state) : NaN;
+      const indoorTempUnit = indoorTempEntity?.attributes.unit_of_measurement ?? this.hass.config.unit_system.temperature ?? '°C';
+      indoorTempC = Number.isFinite(indoorTempVal) ? toCelsius(indoorTempVal, indoorTempUnit) : undefined;
+      indoorTempDisplay = indoorTempC !== undefined ? formatTemperature(indoorTempEntity!.state, this.hass, indoorTempUnit) : undefined;
+
+      const indoorRHVal = indoorRHEntity && !isUnavailable(indoorRHEntity) ? Number(indoorRHEntity.state) : NaN;
+      indoorRH = Number.isFinite(indoorRHVal) && indoorRHVal > 0 && indoorRHVal <= 100 ? indoorRHVal : undefined;
+    }
+
+    // Step 3: Surface temperature
+    const surfaceEntityId = comfort.surface_temperature_entity;
+    const surfaceEntity = surfaceEntityId ? this.hass.states[surfaceEntityId] : undefined;
+    let surfaceMeasured = false;
+    let surfaceTempC: number | undefined;
+
+    if (surfaceEntity && !isUnavailable(surfaceEntity)) {
+      const rawVal = Number(surfaceEntity.state);
+      const rawUnit = surfaceEntity.attributes.unit_of_measurement ?? this.hass.config.unit_system.temperature ?? '°C';
+      const converted = Number.isFinite(rawVal) ? toCelsius(rawVal, rawUnit) : undefined;
+      if (converted !== undefined) {
+        surfaceTempC = converted;
+        surfaceMeasured = true;
+      }
+    }
+
+    if (surfaceTempC === undefined && outdoorTempC !== undefined && indoorTempC !== undefined) {
+      surfaceTempC = indoorTempC + (outdoorTempC - indoorTempC) * comfort.glazing_factor;
+    }
+
+    // Step 4: Compute thermodynamic values
+    const outdoorAH = (outdoorTempC !== undefined && outdoorRH !== undefined) ? absoluteHumidity(outdoorTempC, outdoorRH) : undefined;
+    const outdoorSatDist = (outdoorTempC !== undefined && outdoorRH !== undefined) ? saturationDistance(outdoorTempC, outdoorRH) : undefined;
+    const indoorDPCalcC = (indoorTempC !== undefined && indoorRH !== undefined) ? dewPoint(indoorTempC, indoorRH) : undefined;
+    const indoorAH = (indoorTempC !== undefined && indoorRH !== undefined) ? absoluteHumidity(indoorTempC, indoorRH) : undefined;
+    const condensation = (indoorTempC !== undefined && indoorRH !== undefined && surfaceTempC !== undefined) ? condensationAnalysis(indoorTempC, indoorRH, surfaceTempC) : undefined;
+    const ventilation = (indoorAH !== undefined && outdoorAH !== undefined) ? ventilationRecommendation(indoorAH, outdoorAH, comfort.ventilation_humidity_delta) : undefined;
+    const cooling = (indoorTempC !== undefined && outdoorTempC !== undefined) ? coolingRecommendation(indoorTempC, outdoorTempC, comfort.indoor_temperature_max, comfort.cooling_temperature_delta) : undefined;
+
+    // Step 5: Temperature display unit
+    const sysUnit = this.hass.config.unit_system.temperature ?? '°C';
+    const isFahrenheit = sysUnit.includes('F');
+    const celsiusToDisplay = (c: number): string => {
+      if (isFahrenheit) {
+        return formatNumber(c * 9 / 5 + 32, '°F', 1);
+      } else {
+        return formatNumber(c, '°C', 1);
+      }
+    };
+    const celsiusDeltaToDisplay = (deltaC: number): string =>
+      formatNumber(isFahrenheit ? deltaC * 9 / 5 : deltaC, isFahrenheit ? '°F' : '°C', 1);
+
+    // Step 6: Outdoor temperature category
+    const tempCategory = (() => {
+      if (outdoorTempC === undefined) return undefined;
+      if (outdoorTempC < comfort.indoor_temperature_min - 4) return 'cold';
+      if (outdoorTempC < comfort.indoor_temperature_min) return 'cool';
+      if (outdoorTempC <= comfort.indoor_temperature_max) return 'comfortable';
+      if (outdoorTempC <= comfort.indoor_temperature_max + 4) return 'warm';
+      return 'hot';
+    })();
+
+    const rhCategory = (() => {
+      if (outdoorRH === undefined) return undefined;
+      if (outdoorRH < comfort.indoor_humidity_min) return 'dry';
+      if (outdoorRH <= comfort.indoor_humidity_max) return 'comfortable';
+      if (outdoorRH <= 75) return 'humid';
+      return 'very_humid';
+    })();
+
+    const pressureCategory = (() => {
+      if (outdoorPressureHpa === undefined) return undefined;
+      if (outdoorPressureHpa < 1000) return 'low';
+      if (outdoorPressureHpa > 1025) return 'high';
+      return 'normal';
+    })();
+
+    const indoorTempCategory = (() => {
+      if (indoorTempC === undefined) return undefined;
+      if (indoorTempC < comfort.indoor_temperature_min) return 'low';
+      if (indoorTempC > comfort.indoor_temperature_max) return 'high';
+      return 'comfortable';
+    })();
+
+    const indoorRHCategory = (() => {
+      if (indoorRH === undefined) return undefined;
+      if (indoorRH < comfort.indoor_humidity_min) return 'low';
+      if (indoorRH > comfort.indoor_humidity_max) return 'high';
+      return 'comfortable';
+    })();
+
+    // Build outdoor summary insight
+    const summaryText = tempCategory && rhCategory ?
+      `${localize(language, `comfort.temp_${tempCategory}`)} • ${localize(language, `comfort.rh_${rhCategory}`)}` :
+      localize(language, 'comfort.unavailable');
+
+    // Saturation distance insight
+    const saturationInsight = outdoorSatDist !== undefined ? (() => {
+      const statusClass = outdoorSatDist < 3 ? 'warning' : outdoorSatDist < 8 ? 'info' : 'safe';
+      const label = outdoorSatDist < 3 ? 'saturation_close' : outdoorSatDist < 8 ? 'saturation_moderate' : 'saturation_far';
+      return this._comfortInsight('mdi:water-thermometer-outline', localize(language, `comfort.${label}`), celsiusDeltaToDisplay(outdoorSatDist), statusClass, 'comfort.saturation_distance', language);
+    })() : nothing;
+
+    // Outdoor dew point display
+    let outdoorDPDisplay: string;
+    let outdoorDPTag: string | undefined;
+    if (outdoorDPMeasured !== undefined) {
+      outdoorDPDisplay = formatTemperature(outdoorDPMeasured, this.hass, resolved.dew_point?.unit);
+      outdoorDPTag = undefined;
+    } else if (outdoorDPCalcC !== undefined) {
+      outdoorDPDisplay = celsiusToDisplay(outdoorDPCalcC);
+      outdoorDPTag = localize(language, 'comfort.dew_point_calculated');
+    } else {
+      outdoorDPDisplay = '—';
+      outdoorDPTag = undefined;
+    }
+
+    // Absolute humidity comparison
+    const ahInsight = (outdoorAH !== undefined && indoorAH !== undefined) ? (() => {
+      const delta = Math.abs(outdoorAH - indoorAH);
+      let text: string;
+      if (delta < 1.5) {
+        text = localize(language, 'comfort.absolute_humidity_similar');
+      } else if (outdoorAH < indoorAH) {
+        text = localize(language, 'comfort.absolute_humidity_outdoor_drier');
+      } else {
+        text = localize(language, 'comfort.absolute_humidity_outdoor_wetter');
+      }
+      const value = `${formatNumber(indoorAH, 'g/m³', 1)} → ${formatNumber(outdoorAH, 'g/m³', 1)}`;
+      return this._comfortInsight('mdi:water', text, value, 'info', 'comfort.absolute_humidity', language);
+    })() : nothing;
+
+    // Indoor dew point
+    const indoorDPDisplay = indoorDPCalcC !== undefined ? celsiusToDisplay(indoorDPCalcC) : '—';
+    const indoorDPTag = indoorDPCalcC !== undefined ? localize(language, 'comfort.calculated') : undefined;
+
+    // Surface temperature
+    const surfaceDisplay = surfaceTempC !== undefined
+      ? surfaceMeasured && surfaceEntity
+        ? formatTemperature(surfaceEntity.state, this.hass, surfaceEntity.attributes.unit_of_measurement)
+        : celsiusToDisplay(surfaceTempC)
+      : '—';
+    const surfaceTag = surfaceTempC !== undefined ? (surfaceMeasured ? localize(language, 'comfort.surface_measured') : localize(language, 'comfort.surface_estimated')) : undefined;
+
+    // Condensation margin insight
+    const condensationInsight = condensation ? (() => {
+      const statusClass = condensation.level === 'critical' ? 'critical' : condensation.level === 'warning' ? 'warning' : 'safe';
+      const text = localize(language, `comfort.condensation_level_${condensation.level}`);
+      const value = celsiusDeltaToDisplay(condensation.margin);
+      return this._comfortInsight('mdi:snowflake-thermometer', text, value, statusClass, 'comfort.condensation_margin', language);
+    })() : nothing;
+
+    // Ventilation recommendation insight
+    const ventilationInsight = ventilation ? (() => {
+      const statusClass = ventilation.status === 'open' ? 'safe' : ventilation.status === 'avoid' ? 'warning' : 'info';
+      const text = localize(language, `comfort.ventilation_${ventilation.status}`);
+      return this._comfortInsight('mdi:window-open-variant', text, undefined, statusClass, 'comfort.ventilation', language);
+    })() : nothing;
+
+    // Cooling recommendation insight
+    const coolingInsight = cooling ? (() => {
+      const statusClass = cooling.status === 'open' ? 'safe' : cooling.status === 'avoid' ? 'warning' : 'info';
+      const text = localize(language, `comfort.cooling_${cooling.status}`);
+      return this._comfortInsight('mdi:fan', text, undefined, statusClass, 'comfort.cooling', language);
+    })() : nothing;
+
+    return html`
+      <div class="panel comfort-section">
+        <div class="panel-title">${localize(language, 'comfort.section_title')}</div>
+        <div class="comfort-columns">
+          <!-- Outdoor column -->
+          <div class="comfort-col">
+            <div class="comfort-col-title">${localize(language, 'comfort.outdoor_panel_title')}</div>
+            ${outdoorTempC !== undefined && outdoorRH !== undefined
+              ? this._comfortInsight('mdi:weather-partly-cloudy', summaryText, undefined, 'info', 'comfort.outdoor_summary', language)
+              : html`<div class="comfort-unavailable">${localize(language, 'comfort.outdoor_data_unavailable')}</div>`}
+            ${saturationInsight}
+            <div class="comfort-metrics-grid">
+              ${outdoorTempC !== undefined
+                ? this._comfortCard('mdi:thermometer', localize(language, 'metrics.outdoor_temperature'), this._formatMetricValue('outdoor_temperature', outdoorTempResolved.value, outdoorTempResolved.unit, language), tempCategory ? localize(language, `comfort.temp_${tempCategory}`) : undefined, 'metrics.outdoor_temperature', language)
+                : nothing}
+              ${outdoorRH !== undefined
+                ? this._comfortCard('mdi:water-percent', localize(language, 'metrics.humidity'), formatPercent(outdoorRH), rhCategory ? localize(language, `comfort.rh_${rhCategory}`) : undefined, 'metrics.humidity', language)
+                : nothing}
+              ${outdoorDPDisplay !== '—'
+                ? this._comfortCard('mdi:water', localize(language, 'comfort.dew_point_label'), outdoorDPDisplay, outdoorDPTag, 'comfort.dew_point_outdoor', language)
+                : nothing}
+              ${outdoorPressure !== undefined
+                ? this._comfortCard('mdi:gauge', localize(language, 'metrics.pressure'), this._formatMetricValue('pressure', outdoorPressure, resolved.pressure?.unit, language), pressureCategory ? localize(language, `comfort.pressure_${pressureCategory}`) : undefined, 'metrics.pressure', language)
+                : nothing}
+            </div>
+            ${ahInsight}
+          </div>
+          <!-- Indoor column -->
+          <div class="comfort-col">
+            <div class="comfort-col-title">${localize(language, 'comfort.indoor_panel_title')}</div>
+            ${!zone ? html`<div class="comfort-unavailable">${localize(language, 'comfort.no_indoor_zone')}</div>` : nothing}
+            ${zone && (indoorTempC === undefined || indoorRH === undefined)
+              ? html`<div class="comfort-unavailable">${localize(language, 'comfort.indoor_data_unavailable')}</div>`
+              : nothing}
+            <div class="comfort-metrics-grid">
+              ${indoorTempDisplay ? this._comfortCard('mdi:thermometer', localize(language, 'zone_metric.temperature'), indoorTempDisplay, indoorTempCategory ? localize(language, `comfort.indoor_temperature_${indoorTempCategory}`) : undefined, 'zone_metric.temperature', language) : nothing}
+              ${indoorRH !== undefined ? this._comfortCard('mdi:water-percent', localize(language, 'zone_metric.humidity'), formatPercent(indoorRH), indoorRHCategory ? localize(language, `comfort.indoor_humidity_${indoorRHCategory}`) : undefined, 'zone_metric.humidity', language) : nothing}
+              ${indoorDPCalcC !== undefined
+                ? this._comfortCard('mdi:water', localize(language, 'comfort.indoor_dew_point_label'), indoorDPDisplay, indoorDPTag, 'comfort.dew_point_indoor', language)
+                : nothing}
+              ${surfaceTempC !== undefined
+                ? this._comfortCard('mdi:window-closed-variant', localize(language, 'comfort.surface_label'), surfaceDisplay, surfaceTag, 'comfort.surface_temperature', language)
+                : nothing}
+            </div>
+            ${condensationInsight}
+            ${ventilationInsight}
+            ${coolingInsight}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   static styles = css`
     :host {
       display: block;
     }
     ha-card {
-      overflow: hidden;
+      overflow: visible;
       padding: 0;
       border: none;
       display: flex;
@@ -786,6 +1100,171 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       --mdc-icon-size: 16px;
       color: #ffb300;
     }
+    .help-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .help-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1px solid currentColor;
+      background: transparent;
+      color: inherit;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      opacity: 0.65;
+      padding: 0;
+      line-height: 1;
+      flex-shrink: 0;
+      margin-left: 3px;
+    }
+    .help-btn:hover,
+    .help-btn:focus,
+    .help-btn:focus-visible {
+      opacity: 1;
+      outline: 2px solid var(--accent-color, #7ec8ff);
+      outline-offset: 1px;
+    }
+    .help-tip {
+      visibility: hidden;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 24, 36, 0.97);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 400;
+      line-height: 1.4;
+      white-space: normal;
+      max-width: 240px;
+      width: max-content;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      z-index: 100;
+      pointer-events: none;
+    }
+    .help-wrap:hover .help-tip,
+    .help-btn:focus + .help-tip,
+    .help-btn:focus-visible + .help-tip {
+      visibility: visible;
+    }
+    .comfort-section {
+      padding: 12px 16px;
+    }
+    .comfort-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .comfort-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .comfort-col-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      opacity: 0.8;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+    }
+    .comfort-insight {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-radius: 8px;
+      font-size: 0.83rem;
+      background: rgba(255,255,255,0.07);
+    }
+    .comfort-insight.status-info {
+      background: rgba(33,150,243,0.2);
+    }
+    .comfort-insight.status-safe {
+      background: rgba(76,175,80,0.2);
+    }
+    .comfort-insight.status-warning {
+      background: rgba(255,152,0,0.25);
+    }
+    .comfort-insight.status-critical {
+      background: rgba(211,47,47,0.3);
+    }
+    .comfort-card {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-rows: auto auto auto;
+      align-items: center;
+      column-gap: 7px;
+      row-gap: 2px;
+      font-size: 0.83rem;
+      padding: 8px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.07);
+      min-width: 0;
+    }
+    .comfort-card ha-icon {
+      --mdc-icon-size: 18px;
+      color: var(--accent-color, #7ec8ff);
+      grid-column: 1;
+      grid-row: 1 / 3;
+    }
+    .comfort-card-label {
+      grid-column: 2;
+      grid-row: 1;
+      min-width: 0;
+      opacity: 0.85;
+    }
+    .comfort-card-value {
+      grid-column: 2;
+      grid-row: 2;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .comfort-card > .help-wrap {
+      grid-column: 3;
+      grid-row: 1;
+    }
+    .comfort-tag {
+      grid-column: 2 / 4;
+      grid-row: 3;
+      font-size: 0.7rem;
+      opacity: 0.7;
+    }
+    .comfort-metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .comfort-insight-icon {
+      --mdc-icon-size: 18px;
+      flex-shrink: 0;
+    }
+    .comfort-insight-text {
+      flex: 1;
+    }
+    .comfort-insight-value {
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .comfort-unavailable {
+      font-size: 0.85rem;
+      opacity: 0.75;
+      padding: 8px 0;
+    }
+    @media (max-width: 540px) {
+      .comfort-columns {
+        grid-template-columns: 1fr;
+      }
+    }
     @media (max-width: 480px) {
       .panel.metrics .metrics-grid {
         grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
@@ -795,6 +1274,11 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       }
       .temperature {
         font-size: 1.5rem;
+      }
+    }
+    @media (max-width: 340px) {
+      .comfort-metrics-grid {
+        grid-template-columns: 1fr;
       }
     }
   `;
