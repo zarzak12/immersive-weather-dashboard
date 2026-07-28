@@ -936,11 +936,28 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
     }
     .info {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
       padding: 16px;
       background: rgba(16, 19, 28, 0.94);
+      /* Masonry-style responsive columns. When the card is given width (e.g.
+         stretched in a Sections dashboard), the information area fans the panels
+         out into 2-3 side-by-side columns instead of stacking into one tall
+         band; it collapses back to a single column on narrow cards and phones.
+         Column count follows the card's real rendered width, independent of the
+         viewport, so it works even in a narrow slot on a wide screen. */
+      column-width: 300px;
+      column-gap: 12px;
+    }
+    .info > * {
+      -webkit-column-break-inside: avoid;
+      break-inside: avoid;
+      /* multicolumn has no flex gap: space the panels with a bottom margin */
+      margin: 0 0 12px;
+    }
+    /* Alerts and validation/notice banners stay full width across the columns
+       so recommendations and warnings are never squeezed into a single column. */
+    .info > .alerts,
+    .info > .panel.notice {
+      column-span: all;
     }
     .panel {
       background: rgba(255, 255, 255, var(--panel-opacity, 0.5));
