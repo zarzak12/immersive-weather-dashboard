@@ -463,11 +463,12 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
         <div class="metrics-grid">
           ${items.map(
             ({ metric, resolved }) => html`
-              <div class="metric">
+              <div class="metric has-tip" tabindex="0" aria-describedby=${this._tipId(`metric-${metric.key}`)}>
                 <ha-icon icon=${metric.icon || METRIC_CATALOG[metric.key].defaultIcon}
                   style=${metric.color ? `color:${metric.color}` : ''}></ha-icon>
-                <span class="metric-label">${metric.label || localize(language, `metrics.${metric.key}`)}${this._renderHelp(`metrics.${metric.key}`, language)}</span>
+                <span class="metric-label">${metric.label || localize(language, `metrics.${metric.key}`)}</span>
                 <span class="metric-value">${this._formatMetricValue(metric.key, resolved.value, resolved.unit, language)}</span>
+                ${this._tooltip(`metrics.${metric.key}`, `metric-${metric.key}`, language)}
               </div>
             `
           )}
@@ -504,15 +505,16 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     const unavailable = !this.hass || !entity || isUnavailable(entity);
     const value = unavailable ? '—' : this._formatZoneValue(key, entity!);
     return html`
-      <div class="zone-row">
+      <div class="zone-row has-tip" tabindex="0" aria-describedby=${this._tipId(`zone-${zone.id}-${key}`)}>
         <ha-icon icon=${ZONE_ENTITY_ICON[key]}></ha-icon>
-        <span class="zone-label">${localize(language, `zone_metric.${key}`)}${this._renderHelp(`zone_metric.${key}`, language)}</span>
+        <span class="zone-label">${localize(language, `zone_metric.${key}`)}</span>
         <span class="zone-value">${value}</span>
         ${unavailable
           ? html`<span class="zone-warning" title=${localize(language, 'zone.entity_unavailable', { entity: entityId })}>
               <ha-icon icon="mdi:alert-circle-outline"></ha-icon>
             </span>`
           : nothing}
+        ${this._tooltip(`zone_metric.${key}`, `zone-${zone.id}-${key}`, language)}
       </div>
     `;
   }
@@ -559,40 +561,53 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     `;
   }
 
-  private _renderHelp(topic: string, language: string) {
-    return html`
-      <span class="help-wrap">
-        <button
-          class="help-btn"
-          type="button"
-          aria-label=${localize(language, 'comfort.tooltip_aria_label', { topic: localize(language, `help.${topic}`) })}
-          title=${localize(language, `help.${topic}`)}
-          @click=${(e: Event) => { e.stopPropagation(); }}
-        >?</button>
-        <span class="help-tip" role="tooltip">${localize(language, `help.${topic}`)}</span>
-      </span>
-    `;
+  /** Stable, collision-free id for a tooltip element within a given scope. */
+  private _tipId(scope: string): string {
+    return `iwd-tip-${scope.replace(/[^a-z0-9]+/gi, '-')}`;
+  }
+
+  /**
+   * Educational tooltip attached to a whole value tile/row/insight (no separate
+   * "?" button). The host element itself is the trigger: it reveals the
+   * explanation on hover (pointer), on focus (keyboard) and on tap (touch, via
+   * focus), so no extra glyphs clutter the layout. `scope` must be unique across
+   * the rendered card so tooltip ids and their `aria-describedby` never collide
+   * (the same help key can back several tiles, e.g. an outdoor metric and its
+   * comfort counterpart).
+   */
+  private _tooltip(helpKey: string, scope: string, language: string) {
+    return html`<span class="help-tip" role="tooltip" id=${this._tipId(scope)}>${localize(language, `help.${helpKey}`)}</span>`;
   }
 
   private _comfortCard(icon: string, label: string, value: string, tag: string | undefined, helpKey: string | undefined, language: string) {
     return html`
-      <div class="comfort-card">
+      <div
+        class="comfort-card${helpKey ? ' has-tip' : ''}"
+        tabindex=${helpKey ? '0' : nothing}
+        aria-describedby=${helpKey ? this._tipId(`comfort-${helpKey}`) : nothing}
+      >
         <ha-icon icon=${icon}></ha-icon>
-        <span class="comfort-card-label">${label}</span>
-        <span class="comfort-card-value">${value}</span>
-        ${tag ? html`<span class="comfort-tag">${tag}</span>` : nothing}
-        ${helpKey ? this._renderHelp(helpKey, language) : nothing}
+        <div class="cc-body">
+          <span class="cc-label">${label}</span>
+          ${tag ? html`<span class="cc-tag">${tag}</span>` : nothing}
+        </div>
+        <span class="cc-value">${value}</span>
+        ${helpKey ? this._tooltip(helpKey, `comfort-${helpKey}`, language) : nothing}
       </div>
     `;
   }
 
   private _comfortInsight(icon: string, text: string, value: string | undefined, statusClass: string, helpKey: string | undefined, language: string) {
     return html`
-      <div class="comfort-insight status-${statusClass}">
+      <div
+        class="comfort-insight status-${statusClass}${helpKey ? ' has-tip' : ''}"
+        tabindex=${helpKey ? '0' : nothing}
+        aria-describedby=${helpKey ? this._tipId(`comfort-${helpKey}`) : nothing}
+      >
         <ha-icon class="comfort-insight-icon" icon=${icon}></ha-icon>
         <span class="comfort-insight-text">${text}</span>
         ${value ? html`<span class="comfort-insight-value">${value}</span>` : nothing}
-        ${helpKey ? this._renderHelp(helpKey, language) : nothing}
+        ${helpKey ? this._tooltip(helpKey, `comfort-${helpKey}`, language) : nothing}
       </div>
     `;
   }
@@ -1100,37 +1115,6 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       --mdc-icon-size: 16px;
       color: #ffb300;
     }
-    .help-wrap {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-    }
-    .help-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      border: 1px solid currentColor;
-      background: transparent;
-      color: inherit;
-      font-size: 10px;
-      font-weight: 700;
-      cursor: pointer;
-      opacity: 0.65;
-      padding: 0;
-      line-height: 1;
-      flex-shrink: 0;
-      margin-left: 3px;
-    }
-    .help-btn:hover,
-    .help-btn:focus,
-    .help-btn:focus-visible {
-      opacity: 1;
-      outline: 2px solid var(--accent-color, #7ec8ff);
-      outline-offset: 1px;
-    }
     .help-tip {
       visibility: hidden;
       position: absolute;
@@ -1151,18 +1135,14 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       z-index: 100;
       pointer-events: none;
     }
-    .help-wrap:hover .help-tip,
-    .help-btn:focus + .help-tip,
-    .help-btn:focus-visible + .help-tip {
-      visibility: visible;
-    }
     .comfort-section {
       padding: 12px 16px;
+      container-type: inline-size;
     }
     .comfort-columns {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      gap: 12px 16px;
     }
     .comfort-col {
       display: flex;
@@ -1198,51 +1178,78 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     .comfort-insight.status-critical {
       background: rgba(211,47,47,0.3);
     }
+    .comfort-metrics-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
     .comfort-card {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      grid-template-rows: auto auto auto;
+      display: flex;
       align-items: center;
-      column-gap: 7px;
-      row-gap: 2px;
+      gap: 9px;
       font-size: 0.83rem;
-      padding: 8px;
+      padding: 7px 10px;
       border-radius: 8px;
-      background: rgba(255,255,255,0.07);
+      background: rgba(255, 255, 255, 0.07);
       min-width: 0;
     }
     .comfort-card ha-icon {
-      --mdc-icon-size: 18px;
+      --mdc-icon-size: 20px;
       color: var(--accent-color, #7ec8ff);
-      grid-column: 1;
-      grid-row: 1 / 3;
+      flex-shrink: 0;
     }
-    .comfort-card-label {
-      grid-column: 2;
-      grid-row: 1;
+    .cc-body {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
       min-width: 0;
+      flex: 1;
+    }
+    .cc-label {
       opacity: 0.85;
+      line-height: 1.25;
     }
-    .comfort-card-value {
-      grid-column: 2;
-      grid-row: 2;
+    .cc-tag {
+      font-size: 0.72rem;
+      opacity: 0.6;
+      line-height: 1.25;
+    }
+    .cc-value {
       font-weight: 600;
+      font-size: 0.92rem;
       white-space: nowrap;
+      flex-shrink: 0;
     }
-    .comfort-card > .help-wrap {
-      grid-column: 3;
-      grid-row: 1;
+    .has-tip {
+      position: relative;
+      cursor: help;
     }
-    .comfort-tag {
-      grid-column: 2 / 4;
-      grid-row: 3;
-      font-size: 0.7rem;
-      opacity: 0.7;
+    .has-tip .cc-label,
+    .has-tip .comfort-insight-text,
+    .metric.has-tip .metric-label,
+    .zone-row.has-tip .zone-label {
+      text-decoration: underline dotted;
+      text-underline-offset: 2px;
+      text-decoration-color: rgba(255, 255, 255, 0.32);
     }
-    .comfort-metrics-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+    .has-tip:focus-visible {
+      outline: 2px solid var(--accent-color, #7ec8ff);
+      outline-offset: 1px;
+      border-radius: 6px;
+    }
+    .comfort-card.has-tip > .help-tip,
+    .comfort-insight.has-tip > .help-tip {
+      left: 10px;
+      right: 10px;
+      width: auto;
+      max-width: none;
+      transform: none;
+    }
+    .has-tip:hover > .help-tip,
+    .has-tip:focus > .help-tip,
+    .has-tip:focus-visible > .help-tip,
+    .has-tip:focus-within > .help-tip {
+      visibility: visible;
     }
     .comfort-insight-icon {
       --mdc-icon-size: 18px;
@@ -1260,7 +1267,7 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       opacity: 0.75;
       padding: 8px 0;
     }
-    @media (max-width: 540px) {
+    @container (max-width: 520px) {
       .comfort-columns {
         grid-template-columns: 1fr;
       }
@@ -1274,11 +1281,6 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       }
       .temperature {
         font-size: 1.5rem;
-      }
-    }
-    @media (max-width: 340px) {
-      .comfort-metrics-grid {
-        grid-template-columns: 1fr;
       }
     }
   `;
