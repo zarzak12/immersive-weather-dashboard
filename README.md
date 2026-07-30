@@ -41,6 +41,9 @@ Immersive Weather Dashboard turns a single Lovelace card into a full-screen weat
 
 The result is a dashboard/wall-panel card that feels alive and reacts to your actual weather entity and sensors, while keeping your own house recognizable in the foreground.
 
+<img width="804" height="4093" alt="image" src="https://github.com/user-attachments/assets/87d0b55d-3d57-4685-ab1d-4589704f819d" />
+
+
 ## Feature tour
 
 - Full-screen immersive layout, designed for phones, tablets, desktop dashboards and wall-mounted panels. By default the animated **scene stays a compact, unobstructed viewport at the top** of the card, with all metrics, zones, alerts and forecasts flowing naturally below it — nothing overlaps the house photo or the sky.
