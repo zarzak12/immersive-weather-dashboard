@@ -11,6 +11,10 @@ export interface SceneState {
   windBearingDeg: number;
   reducedMotion: boolean;
   cloudCoverage: number;
+  /** Current sun elevation in degrees; drives the dawn/dusk sky colouring. */
+  sunElevation: number;
+  /** Current sun azimuth in degrees (clockwise from north); positions the sun disc. */
+  sunAzimuth: number;
 }
 
 interface QualityPreset {
@@ -26,6 +30,75 @@ const QUALITY_PRESETS: Record<AnimationQuality, QualityPreset> = {
   medium: { rain: 140, snow: 80, hail: 60, stars: 90, clouds: 5 },
   high: { rain: 280, snow: 150, hail: 110, stars: 150, clouds: 7 }
 };
+
+interface SkyPalette {
+  dayTop: string;
+  dayBottom: string;
+  nightTop: string;
+  nightBottom: string;
+}
+
+/** Day/night sky gradient endpoints per weather category (blended by sun elevation). */
+const SKY_PALETTES: Record<SceneCategory, SkyPalette> = {
+  clear: { dayTop: '#2f8ce0', dayBottom: '#bfe4ff', nightTop: '#050818', nightBottom: '#161a35' },
+  'partly-cloudy': { dayTop: '#4f9be0', dayBottom: '#bfe0f5', nightTop: '#0c1330', nightBottom: '#1c2650' },
+  cloudy: { dayTop: '#8f9bb0', dayBottom: '#c3ccd8', nightTop: '#141b2c', nightBottom: '#232d42' },
+  fog: { dayTop: '#c8d0d8', dayBottom: '#dfe4e8', nightTop: '#2b3440', nightBottom: '#3d4753' },
+  rain: { dayTop: '#5b6b82', dayBottom: '#8a97a8', nightTop: '#0d1220', nightBottom: '#1c2436' },
+  pouring: { dayTop: '#5b6b82', dayBottom: '#8a97a8', nightTop: '#0d1220', nightBottom: '#1c2436' },
+  snow: { dayTop: '#aebbcc', dayBottom: '#e2e8f0', nightTop: '#1b2436', nightBottom: '#2e3850' },
+  'snowy-rainy': { dayTop: '#8f9bb0', dayBottom: '#c3ccd8', nightTop: '#141b2c', nightBottom: '#232d42' },
+  hail: { dayTop: '#8f9bb0', dayBottom: '#c3ccd8', nightTop: '#141b2c', nightBottom: '#232d42' },
+  thunderstorm: { dayTop: '#4a5568', dayBottom: '#718096', nightTop: '#0b0f19', nightBottom: '#1a202c' },
+  windy: { dayTop: '#2f8ce0', dayBottom: '#bfe4ff', nightTop: '#050818', nightBottom: '#161a35' }
+};
+
+/** How strongly the golden-hour tint shows through per category (clear skies glow most). */
+const SKY_CLEARNESS: Record<SceneCategory, number> = {
+  clear: 1,
+  'partly-cloudy': 0.8,
+  windy: 0.9,
+  snow: 0.5,
+  cloudy: 0.4,
+  'snowy-rainy': 0.35,
+  hail: 0.35,
+  rain: 0.3,
+  pouring: 0.25,
+  fog: 0.2,
+  thunderstorm: 0.15
+};
+
+const GOLDEN_TOP = '#b0648a'; // dusky rose overhead at dawn/dusk
+const GOLDEN_HORIZON = '#ff7a3c'; // warm orange glow near the horizon
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function mixRgb(a: string, b: string, t: number): [number, number, number] {
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
+  return [Math.round(ar + (br - ar) * t), Math.round(ag + (bg - ag) * t), Math.round(ab + (bb - ab) * t)];
+}
+
+/** Tints an already-parsed RGB tuple toward a hex colour by fraction `t`. */
+function tintRgb(base: [number, number, number], hex: string, t: number): [number, number, number] {
+  const [hr, hg, hb] = hexToRgb(hex);
+  return [
+    Math.round(base[0] + (hr - base[0]) * t),
+    Math.round(base[1] + (hg - base[1]) * t),
+    Math.round(base[2] + (hb - base[2]) * t)
+  ];
+}
+
+function rgbStr([r, g, b]: [number, number, number]): string {
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function rgbaStr([r, g, b]: [number, number, number], alpha: number): string {
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 interface RainDrop {
   x: number;
@@ -100,7 +173,9 @@ export class SceneRenderer {
     windSpeedKmh: 0,
     windBearingDeg: 0,
     reducedMotion: false,
-    cloudCoverage: 0
+    cloudCoverage: 0,
+    sunElevation: 25,
+    sunAzimuth: 180
   };
 
   private rain: RainDrop[] = [];
@@ -261,35 +336,35 @@ export class SceneRenderer {
   }
 
   private drawSky(): void {
-    const { isDay, category } = this.state;
     const ctx = this.bgCtx;
+    const [top, bottom] = this.skyColors();
     const gradient = ctx.createLinearGradient(0, 0, 0, this.height);
-
-    if (category === 'thunderstorm') {
-      gradient.addColorStop(0, isDay ? '#4a5568' : '#0b0f19');
-      gradient.addColorStop(1, isDay ? '#718096' : '#1a202c');
-    } else if (category === 'fog') {
-      gradient.addColorStop(0, isDay ? '#c8d0d8' : '#2b3440');
-      gradient.addColorStop(1, isDay ? '#dfe4e8' : '#3d4753');
-    } else if (category === 'cloudy' || category === 'snowy-rainy' || category === 'hail') {
-      gradient.addColorStop(0, isDay ? '#8f9bb0' : '#141b2c');
-      gradient.addColorStop(1, isDay ? '#c3ccd8' : '#232d42');
-    } else if (category === 'pouring' || category === 'rain') {
-      gradient.addColorStop(0, isDay ? '#5b6b82' : '#0d1220');
-      gradient.addColorStop(1, isDay ? '#8a97a8' : '#1c2436');
-    } else if (category === 'snow') {
-      gradient.addColorStop(0, isDay ? '#aebbcc' : '#1b2436');
-      gradient.addColorStop(1, isDay ? '#e2e8f0' : '#2e3850');
-    } else if (category === 'partly-cloudy') {
-      gradient.addColorStop(0, isDay ? '#4f9be0' : '#0c1330');
-      gradient.addColorStop(1, isDay ? '#bfe0f5' : '#1c2650');
-    } else {
-      gradient.addColorStop(0, isDay ? '#2f8ce0' : '#050818');
-      gradient.addColorStop(1, isDay ? '#bfe4ff' : '#161a35');
-    }
-
+    gradient.addColorStop(0, top);
+    gradient.addColorStop(1, bottom);
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, this.width, this.height);
+  }
+
+  /**
+   * Computes the sky gradient endpoints. Blends the night and day palettes
+   * across the civil-twilight window (±6°) and layers a warm golden-hour tint
+   * that peaks as the sun crosses the horizon (dawn and dusk).
+   */
+  private skyColors(): [string, string] {
+    const { category, sunElevation } = this.state;
+    const palette = SKY_PALETTES[category] ?? SKY_PALETTES.clear;
+
+    const dayness = clamp((sunElevation + 6) / 12, 0, 1);
+    let top = mixRgb(palette.nightTop, palette.dayTop, dayness);
+    let bottom = mixRgb(palette.nightBottom, palette.dayBottom, dayness);
+
+    const golden = clamp(1 - Math.abs(sunElevation) / 8, 0, 1) * (SKY_CLEARNESS[category] ?? 1);
+    if (golden > 0) {
+      top = tintRgb(top, GOLDEN_TOP, golden * 0.5);
+      bottom = tintRgb(bottom, GOLDEN_HORIZON, golden * 0.9);
+    }
+
+    return [rgbStr(top), rgbStr(bottom)];
   }
 
   private drawCelestial(): void {
@@ -301,14 +376,22 @@ export class SceneRenderer {
     const radius = Math.min(this.width, this.height) * 0.07;
 
     if (isDay) {
-      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 4);
-      glow.addColorStop(0, 'rgba(255, 244, 214, 0.9)');
-      glow.addColorStop(1, 'rgba(255, 244, 214, 0)');
+      // Place the sun by its real elevation/azimuth so it sits low and warm at
+      // sunrise/sunset and high and bright at midday.
+      const el = clamp(this.state.sunElevation, 0, 90);
+      const bodyX = this.width * clamp((this.state.sunAzimuth - 45) / 270, 0, 1);
+      const bodyY = this.height * (0.62 - clamp(el / 60, 0, 1) * 0.46);
+      const warm = clamp(1 - el / 12, 0, 1);
+      const glowRgb = mixRgb('#fff4d6', '#ff9a4a', warm);
+      const sunRgb = mixRgb('#fff6d8', '#ff8a3c', warm);
+      const glow = ctx.createRadialGradient(bodyX, bodyY, 0, bodyX, bodyY, radius * 4);
+      glow.addColorStop(0, rgbaStr(glowRgb, 0.9));
+      glow.addColorStop(1, rgbaStr(glowRgb, 0));
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, this.width, this.height);
       ctx.beginPath();
-      ctx.fillStyle = '#fff6d8';
-      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = rgbStr(sunRgb);
+      ctx.arc(bodyX, bodyY, radius, 0, Math.PI * 2);
       ctx.fill();
     } else {
       if (category !== 'cloudy' && category !== 'snowy-rainy') {

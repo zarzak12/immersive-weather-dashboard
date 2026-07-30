@@ -9,7 +9,9 @@ const animatedState: SceneState = {
   windSpeedKmh: 0,
   windBearingDeg: 0,
   reducedMotion: false,
-  cloudCoverage: 0
+  cloudCoverage: 0,
+  sunElevation: 25,
+  sunAzimuth: 180
 };
 
 afterEach(() => {

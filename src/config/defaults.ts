@@ -9,6 +9,7 @@ import type {
   ImmersiveWeatherCardConfig,
   MetricConfig,
   MetricKey,
+  MoonConfig,
   PartialAlertConditionConfig,
   PartialAlertRuleConfig,
   PartialEnvironmentZoneConfig,
@@ -80,6 +81,10 @@ export const DEFAULT_SUN: SunConfig = {
   enabled: false
 };
 
+export const DEFAULT_MOON: MoonConfig = {
+  enabled: false
+};
+
 export function defaultMetrics(): MetricConfig[] {
   return METRIC_KEYS.map((key, index) => ({
     key,
@@ -103,7 +108,8 @@ export function defaultConfig(): ImmersiveWeatherCardConfig {
     environment_zones: [],
     alerts: [],
     comfort: { ...DEFAULT_COMFORT },
-    sun: { ...DEFAULT_SUN }
+    sun: { ...DEFAULT_SUN },
+    moon: { ...DEFAULT_MOON }
   };
 }
 
@@ -111,6 +117,13 @@ export function defaultConfig(): ImmersiveWeatherCardConfig {
 function mergeSun(input: Partial<SunConfig> | undefined): SunConfig {
   return {
     enabled: typeof input?.enabled === 'boolean' ? input.enabled : DEFAULT_SUN.enabled
+  };
+}
+
+/** Normalizes partial moon-panel config against defaults. */
+function mergeMoon(input: Partial<MoonConfig> | undefined): MoonConfig {
+  return {
+    enabled: typeof input?.enabled === 'boolean' ? input.enabled : DEFAULT_MOON.enabled
   };
 }
 
@@ -309,6 +322,7 @@ export function mergeConfig(input: PartialImmersiveWeatherCardConfig | undefined
     environment_zones: mergeEnvironmentZones(input.environment_zones),
     alerts: mergeAlerts(input.alerts),
     comfort: mergeComfort(input.comfort),
-    sun: mergeSun(input.sun)
+    sun: mergeSun(input.sun),
+    moon: mergeMoon(input.moon)
   };
 }

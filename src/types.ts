@@ -233,6 +233,17 @@ export interface SunConfig {
   enabled: boolean;
 }
 
+/**
+ * Moon-phase panel configuration.
+ *
+ * Display-only; disabled by default. Uses the Home Assistant instance
+ * latitude/longitude to compute the moon's phase, position and rise/set locally.
+ */
+export interface MoonConfig {
+  /** Feature flag — false by default. */
+  enabled: boolean;
+}
+
 export interface ImmersiveWeatherCardConfig {
   type: string;
   title?: string;
@@ -248,12 +259,13 @@ export interface ImmersiveWeatherCardConfig {
   alerts: AlertRuleConfig[];
   comfort: ComfortConfig;
   sun: SunConfig;
+  moon: MoonConfig;
 }
 
 export type PartialImmersiveWeatherCardConfig = Partial<
   Omit<
     ImmersiveWeatherCardConfig,
-    'entities' | 'animation' | 'scene' | 'appearance' | 'forecast' | 'metrics' | 'environment_zones' | 'alerts' | 'comfort' | 'sun'
+    'entities' | 'animation' | 'scene' | 'appearance' | 'forecast' | 'metrics' | 'environment_zones' | 'alerts' | 'comfort' | 'sun' | 'moon'
   >
 > & {
   entities?: ManualEntityMap;
@@ -266,6 +278,7 @@ export type PartialImmersiveWeatherCardConfig = Partial<
   alerts?: PartialAlertRuleConfig[];
   comfort?: Partial<ComfortConfig>;
   sun?: Partial<SunConfig>;
+  moon?: Partial<MoonConfig>;
 };
 
 export interface LovelaceCardConfig {

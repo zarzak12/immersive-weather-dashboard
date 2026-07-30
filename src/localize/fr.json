@@ -122,6 +122,12 @@
       "elevation": "Hauteur du soleil au-dessus de l'horizon. 0° correspond à l'horizon, 90° au zénith ; une valeur négative signifie que le soleil est sous l'horizon.",
       "solar_noon": "Moment où le soleil est au plus haut et franchit le méridien local — rarement exactement 12:00, à cause de votre longitude dans le fuseau et de l'équation du temps.",
       "day_length": "Durée entre le lever et le coucher du soleil aujourd'hui à votre position."
+    },
+    "moon": {
+      "phase": "Phase actuelle du cycle lunaire, de la nouvelle lune au premier quartier, à la pleine lune, au dernier quartier, puis de nouveau à la nouvelle lune.",
+      "illumination": "Pourcentage du disque visible de la Lune éclairé par le Soleil en ce moment.",
+      "azimuth": "Direction de la Lune sur la boussole, mesurée dans le sens horaire depuis le nord géographique (0° = nord, 90° = est, 180° = sud, 270° = ouest).",
+      "elevation": "Hauteur de la Lune au-dessus de l'horizon. 0° correspond à l'horizon ; une valeur négative signifie qu'elle est sous l'horizon."
     }
   },
   "comfort": {
@@ -202,6 +208,29 @@
     "autumn": "Automne",
     "winter": "Hiver"
   },
+  "moon": {
+    "section_title": "Lune",
+    "moonrise": "Lever",
+    "moonset": "Coucher",
+    "azimuth": "Azimut",
+    "elevation": "Élévation",
+    "illumination": "Illumination",
+    "illuminated": "éclairée",
+    "distance": "Distance",
+    "always_up": "La Lune reste au-dessus de l'horizon toute la journée",
+    "always_down": "La Lune reste sous l'horizon toute la journée",
+    "unavailable": "Renseignez la position de votre Home Assistant (latitude/longitude) pour afficher la Lune."
+  },
+  "moon_phase": {
+    "new_moon": "Nouvelle lune",
+    "waxing_crescent": "Premier croissant",
+    "first_quarter": "Premier quartier",
+    "waxing_gibbous": "Gibbeuse croissante",
+    "full_moon": "Pleine lune",
+    "waning_gibbous": "Gibbeuse décroissante",
+    "last_quarter": "Dernier quartier",
+    "waning_crescent": "Dernier croissant"
+  },
   "editor": {
     "tab_data": "Source de données",
     "tab_mapping": "Association des entités",
@@ -213,6 +242,7 @@
     "tab_alerts": "Alertes",
     "tab_comfort": "Analyse de confort",
     "tab_sun": "Course du soleil",
+    "tab_moon": "Lune",
     "title": "Titre de la carte",
     "title_helper": "Titre optionnel affiché en haut de la carte.",
     "weather_entity": "Entité météo",
@@ -319,6 +349,8 @@
     "comfort_glazing_factor": "Facteur de vitrage (0 – 1)",
     "comfort_glazing_factor_helper": "Fraction approximative de l'écart de température extérieur-intérieur utilisée pour estimer la face intérieure de la vitre. Plages indicatives au centre du vitrage : haute performance 0,08–0,12, double vitrage moderne 0,14–0,20, ancien double vitrage 0,25–0,40, simple vitrage 0,60–0,75. Les cadres, bords, le vent et la pose peuvent fortement varier ; utilisez un capteur de surface pour une évaluation fiable.",
     "sun_enabled": "Activer la tuile de course du soleil",
-    "sun_helper": "Affiche l'arc quotidien du soleil (lever, midi solaire, coucher), son azimut et son élévation actuels, la durée du jour et la saison — le tout calculé localement à partir de la position de votre Home Assistant, sans aucun appel réseau."
+    "sun_helper": "Affiche l'arc quotidien du soleil (lever, midi solaire, coucher), son azimut et son élévation actuels, la durée du jour et la saison — le tout calculé localement à partir de la position de votre Home Assistant, sans aucun appel réseau.",
+    "moon_enabled": "Activer la tuile Lune",
+    "moon_helper": "Affiche la phase et l'illumination actuelles de la Lune, son azimut et son élévation, ainsi que son lever et son coucher — le tout calculé localement à partir de la position de votre Home Assistant, sans aucun appel réseau."
   }
 }

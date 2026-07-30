@@ -56,6 +56,9 @@ The result is a dashboard/wall-panel card that feels alive and reacts to your ac
 - Animation quality and intensity controls so low-power wall tablets and Raspberry Pi displays stay smooth.
 - English and French interface, following `hass.locale.language`, with English fallback.
 - Optional **Comfort analysis** — an educational, display-only condensation risk panel (disabled by default). Computes dew point (Magnus formula), absolute humidity (g/m³), and condensation margin from outdoor readings and the selected indoor zone; shows fixed safe/warning/critical risk bands; supports an optional glazing or surface temperature sensor, or a configurable glazing-factor fallback estimate (default 0.15, explicitly labeled as an estimate). It renders as two tiles (**Outdoor conditions** and **Home & comfort**) that take part in the responsive layout. Technical values carry **educational tooltips**, revealed by hovering, keyboard-focusing or tapping the value itself — with no separate "?" button cluttering the display.
+- Optional **Sun path tile** — a horizon-to-horizon arc of the sun's daily trajectory with sunrise, solar noon and sunset, the live sun position, plus azimuth, elevation, day length and (hemisphere-aware) season, computed locally from your Home Assistant location.
+- Optional **Moon tile** — a moon-phase disc showing the current illumination (waxing/waning, crescent → gibbous), the phase name and illuminated percentage, moonrise/moonset, azimuth and elevation, computed locally.
+- **Dawn and dusk in the sky** — in automatic day/night mode the procedural sky transitions through warm sunrise/sunset colours based on the sun's real elevation, and the sun disc sits low and golden near the horizon at dawn and dusk. Celestial positions and the sky refresh continuously, not only on Home Assistant state changes.
 
 ## Requirements
 
@@ -139,6 +142,8 @@ Everything below is configurable from the graphical editor. No YAML editing is r
 | Environment / Environnement | Add/remove/reorder an unlimited number of zones; per zone: name, indoor/outdoor kind, visibility, manual entity mapping for temperature, humidity, AQI, CO₂, PM2.5, PM10 and VOC |
 | Alerts / Alertes | Add/remove visual recommendation rules; per rule: name, message, severity, all/any logic, enabled toggle, and one or more numeric conditions (entity, operator, threshold(s)) |
 | Comfort / Confort | Enable/disable the comfort panel; indoor zone selector (or first visible indoor zone when none selected); optional glazing/surface temperature sensor mapping; indoor temperature/RH ranges; glazing factor (default 0.15, range 0.0–1.0); ventilation absolute-humidity delta (default 2.0 g/m³, range 0.0–20.0 g/m³); cooling temperature delta |
+| Sun path / Course du soleil | Enable/disable the sun-path tile (arc, sunrise/solar noon/sunset, azimuth, elevation, day length, season) |
+| Moon / Lune | Enable/disable the moon tile (phase disc, illumination, moonrise/moonset, azimuth, elevation) |
 
 Two dedicated actions are always available:
 
@@ -303,6 +308,32 @@ Every station metric, environment zone reading and computed comfort value carrie
 - **Touch / tap** — tap the value on touch screens
 
 Tooltips convey explanatory information only. The Comfort analysis makes **no scientific or safety-precision claims** — it is an informational display tool, not a certified measurement instrument or professional advice of any kind.
+
+## Sun path and Moon tiles
+
+Two optional, display-only celestial tiles can be enabled from the editor; both are **disabled by default**. They compute everything **locally in the browser** from your Home Assistant instance's latitude/longitude (**Settings → System → General**) — no network calls and no external astronomy service. If your location is not set, the tile shows a short prompt instead. Both tiles take part in the responsive masonry layout, so on a wide card they sit beside the other panels, and their live values refresh continuously.
+
+### Sun path (Sun path tab)
+
+Renders a horizon-to-horizon **arc of today's solar trajectory** (sampled from a NOAA solar-position algorithm), with:
+
+- **sunrise**, **solar noon** and **sunset** times marked under the arc;
+- the **current sun position** shown live on the arc, with a guide line down to the horizon;
+- a readout of the current **azimuth** (with compass point), **elevation**, **day length** and **season** (flipped for the southern hemisphere).
+
+Polar day and polar night are detected and labeled explicitly.
+
+### Moon (Moon tab)
+
+Shows a **moon-phase disc** rendered from the current illuminated fraction — waxing or waning, from thin crescent through gibbous, and mirrored for the southern hemisphere — plus:
+
+- the **phase name** (new moon, waxing crescent, first quarter, …) and the **illuminated percentage**;
+- **moonrise** and **moonset** times (or an "always up / always down" note near the poles);
+- the current **azimuth** and **elevation**.
+
+The moon's position, illumination and rise/set are computed with the standard low-precision Meeus / SunCalc formulas.
+
+Like the comfort values, the technical readouts (azimuth, elevation, phase, illumination) carry **educational tooltips** revealed by hovering, keyboard-focusing or tapping the value itself.
 
 ## Responsiveness, performance, accessibility, privacy
 

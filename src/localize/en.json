@@ -122,6 +122,12 @@
       "elevation": "Angle of the sun above the horizon. 0° sits on the horizon, 90° is straight overhead; negative values mean the sun is below the horizon.",
       "solar_noon": "The moment the sun is highest and crosses the local meridian — usually not exactly 12:00 clock time, because of your longitude within the timezone and the equation of time.",
       "day_length": "Time between sunrise and sunset today at your location."
+    },
+    "moon": {
+      "phase": "Current phase of the lunar cycle, from new moon through first quarter, full moon and last quarter back to new.",
+      "illumination": "Percentage of the moon's visible disc that is lit by the sun right now.",
+      "azimuth": "Compass direction of the moon, measured clockwise from true north (0° = north, 90° = east, 180° = south, 270° = west).",
+      "elevation": "Angle of the moon above the horizon. 0° sits on the horizon; negative values mean the moon is below it."
     }
   },
   "comfort": {
@@ -202,6 +208,29 @@
     "autumn": "Autumn",
     "winter": "Winter"
   },
+  "moon": {
+    "section_title": "Moon",
+    "moonrise": "Moonrise",
+    "moonset": "Moonset",
+    "azimuth": "Azimuth",
+    "elevation": "Elevation",
+    "illumination": "Illumination",
+    "illuminated": "illuminated",
+    "distance": "Distance",
+    "always_up": "The moon is above the horizon all day",
+    "always_down": "The moon is below the horizon all day",
+    "unavailable": "Set your Home Assistant location (latitude/longitude) to show the moon."
+  },
+  "moon_phase": {
+    "new_moon": "New moon",
+    "waxing_crescent": "Waxing crescent",
+    "first_quarter": "First quarter",
+    "waxing_gibbous": "Waxing gibbous",
+    "full_moon": "Full moon",
+    "waning_gibbous": "Waning gibbous",
+    "last_quarter": "Last quarter",
+    "waning_crescent": "Waning crescent"
+  },
   "editor": {
     "tab_data": "Data source",
     "tab_mapping": "Entity mapping",
@@ -213,6 +242,7 @@
     "tab_alerts": "Alerts",
     "tab_comfort": "Comfort analysis",
     "tab_sun": "Sun path",
+    "tab_moon": "Moon",
     "title": "Card title",
     "title_helper": "Optional title displayed at the top of the card.",
     "weather_entity": "Weather entity",
@@ -319,6 +349,8 @@
     "comfort_glazing_factor": "Glazing factor (0 – 1)",
     "comfort_glazing_factor_helper": "Approximate fraction of the outdoor–indoor temperature difference used to estimate the inner window surface. Indicative center-pane ranges: high-performance glazing 0.08–0.12, modern double glazing 0.14–0.20, older double glazing 0.25–0.40, single glazing 0.60–0.75. Frames, edges, wind and installation can differ greatly; use a surface sensor for reliable assessment.",
     "sun_enabled": "Enable the sun path panel",
-    "sun_helper": "Shows the sun's daily arc (sunrise, solar noon, sunset), its current azimuth and elevation, the day length and the season — all computed locally from your Home Assistant location, with no network calls."
+    "sun_helper": "Shows the sun's daily arc (sunrise, solar noon, sunset), its current azimuth and elevation, the day length and the season — all computed locally from your Home Assistant location, with no network calls.",
+    "moon_enabled": "Enable the moon panel",
+    "moon_helper": "Shows the current moon phase and illumination, its azimuth and elevation, and moonrise/moonset — all computed locally from your Home Assistant location, with no network calls."
   }
 }

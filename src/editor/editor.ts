@@ -18,6 +18,7 @@ import type {
   LovelaceCardConfig,
   MetricConfig,
   MetricKey,
+  MoonConfig,
   PartialImmersiveWeatherCardConfig,
   SceneConfig,
   SunConfig
@@ -28,9 +29,9 @@ import { METRIC_CATALOG } from '../config/metrics';
 import { autoDetectSnapshot, pickWeatherEntity, resolveMetric, type ResolvedMetric } from '../data/entity-discovery';
 import { localize } from '../localize/localize';
 
-type TabId = 'data' | 'mapping' | 'image' | 'appearance' | 'forecast' | 'metrics' | 'environment' | 'alerts' | 'comfort' | 'sun';
+type TabId = 'data' | 'mapping' | 'image' | 'appearance' | 'forecast' | 'metrics' | 'environment' | 'alerts' | 'comfort' | 'sun' | 'moon';
 
-const TABS: TabId[] = ['data', 'mapping', 'image', 'appearance', 'forecast', 'metrics', 'environment', 'alerts', 'comfort', 'sun'];
+const TABS: TabId[] = ['data', 'mapping', 'image', 'appearance', 'forecast', 'metrics', 'environment', 'alerts', 'comfort', 'sun', 'moon'];
 
 interface EntitySuggestion {
   id: string;
@@ -97,6 +98,10 @@ export class ImmersiveWeatherDashboardEditor extends LitElement {
 
   private _updateSun(partial: Partial<SunConfig>): void {
     this._updateRoot('sun', { ...this._config.sun, ...partial });
+  }
+
+  private _updateMoon(partial: Partial<MoonConfig>): void {
+    this._updateRoot('moon', { ...this._config.moon, ...partial });
   }
 
   private _updateEntityOverride(key: MetricKey, entityId: string): void {
@@ -189,6 +194,7 @@ export class ImmersiveWeatherDashboardEditor extends LitElement {
         ${this._activeTab === 'alerts' ? this._renderAlertsTab() : nothing}
         ${this._activeTab === 'comfort' ? this._renderComfortTab() : nothing}
         ${this._activeTab === 'sun' ? this._renderSunTab() : nothing}
+        ${this._activeTab === 'moon' ? this._renderMoonTab() : nothing}
       </div>
       <div class="actions">
         <button class="secondary" @click=${this._resetDefaults}>${this._t('editor.reset_defaults')}</button>
@@ -932,6 +938,21 @@ export class ImmersiveWeatherDashboardEditor extends LitElement {
           @change=${(e: Event) => this._updateSun({ enabled: (e.target as HTMLInputElement).checked })}
         />
         ${this._t('editor.sun_enabled')}
+      </label>
+    `;
+  }
+
+  private _renderMoonTab() {
+    const moon = this._config.moon;
+    return html`
+      <p class="helper">${this._t('editor.moon_helper')}</p>
+      <label class="checkbox">
+        <input
+          type="checkbox"
+          .checked=${moon.enabled}
+          @change=${(e: Event) => this._updateMoon({ enabled: (e.target as HTMLInputElement).checked })}
+        />
+        ${this._t('editor.moon_enabled')}
       </label>
     `;
   }

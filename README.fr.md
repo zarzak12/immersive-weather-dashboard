@@ -56,6 +56,9 @@ Le résultat est une carte de tableau de bord/écran mural qui semble vivante et
 - Contrôles de qualité et d'intensité d'animation pour que les tablettes murales peu puissantes et les écrans Raspberry Pi restent fluides.
 - Interface en anglais et en français, suivant `hass.locale.language`, avec repli sur l'anglais.
 - **Analyse confort** optionnelle — un panneau d'analyse du risque de condensation purement d'affichage (désactivé par défaut). Calcule le point de rosée (formule de Magnus), l'humidité absolue (g/m³) et la marge de condensation à partir des relevés extérieurs et de la zone intérieure sélectionnée ; affiche des niveaux de risque fixes sûr/avertissement/critique ; prend en charge un capteur de vitrage ou de surface facultatif, ou un facteur de vitrage configurable par défaut (0,15) explicitement affiché comme **estimation**. Elle s'affiche sous forme de deux tuiles (**Conditions extérieures** et **Maison et confort**) qui participent à la mise en page responsive. Les valeurs techniques disposent d'une **infobulle éducative**, révélée en survolant, en donnant le focus clavier ou en appuyant sur la valeur elle-même — sans bouton « ? » qui alourdit l'affichage.
+- Tuile **Course du soleil** optionnelle — un arc horizon-à-horizon de la trajectoire quotidienne du soleil avec lever, midi solaire et coucher, la position du soleil en temps réel, plus azimut, élévation, durée du jour et saison (adaptée à l'hémisphère), calculés localement à partir de la position de votre Home Assistant.
+- Tuile **Lune** optionnelle — un disque de phase montrant l'illumination actuelle (croissante/décroissante, croissant → gibbeuse), le nom de la phase et le pourcentage éclairé, le lever/coucher de la Lune, l'azimut et l'élévation, calculés localement.
+- **Aube et crépuscule dans le ciel** — en mode jour/nuit automatique, le ciel procédural passe par des couleurs chaudes de lever/coucher selon l'élévation réelle du soleil, et le disque solaire se place bas et doré près de l'horizon à l'aube et au crépuscule. Les positions célestes et le ciel se rafraîchissent en continu, pas seulement sur changement d'état Home Assistant.
 
 ## Prérequis
 
@@ -139,6 +142,8 @@ Tout ce qui suit est configurable depuis l'éditeur graphique. Aucune édition Y
 | Environnement | Ajouter/supprimer/réordonner un nombre illimité de zones ; par zone : nom, type intérieur/extérieur, visibilité, association manuelle d'entités pour température, humidité, AQI, CO₂, PM2.5, PM10 et COV |
 | Alertes | Ajouter/supprimer des règles de recommandation visuelle ; par règle : nom, message, sévérité, logique tout/au moins un, bascule activé/désactivé, et une ou plusieurs conditions numériques (entité, opérateur, seuil(s)) |
 | Confort | Activer/désactiver le panneau ; sélecteur de zone intérieure (ou première zone intérieure visible) ; capteur de température de vitrage/surface optionnel ; plages de température/humidité intérieures ; facteur de vitrage (par défaut 0,15, plage 0,0–1,0) ; delta d'humidité absolue pour la ventilation (par défaut 2,0 g/m³, plage 0,0–20,0 g/m³) ; delta de température pour le refroidissement |
+| Course du soleil | Activer/désactiver la tuile Soleil (arc, lever/midi solaire/coucher, azimut, élévation, durée du jour, saison) |
+| Lune | Activer/désactiver la tuile Lune (disque de phase, illumination, lever/coucher, azimut, élévation) |
 
 Deux actions dédiées sont toujours disponibles :
 
@@ -303,6 +308,32 @@ Chaque indicateur de station, chaque relevé de zone environnementale et chaque 
 - **Toucher / appui** — appui sur la valeur sur les écrans tactiles
 
 Les infobulles ne contiennent que des informations explicatives. L'analyse confort ne formule **aucune affirmation de précision scientifique ou de sécurité** — c'est un outil d'affichage informatif, et non un instrument certifié ni un conseil professionnel de quelque nature que ce soit.
+
+## Tuiles Soleil et Lune
+
+Deux tuiles célestes optionnelles, purement d'affichage, peuvent être activées depuis l'éditeur ; les deux sont **désactivées par défaut**. Elles calculent tout **localement dans le navigateur** à partir de la latitude/longitude de votre Home Assistant (**Paramètres → Système → Général**) — aucun appel réseau, aucun service d'astronomie externe. Si votre position n'est pas renseignée, la tuile affiche une courte invitation à la place. Les deux tuiles participent à la mise en page masonry responsive : sur une carte large, elles se placent à côté des autres panneaux, et leurs valeurs en direct se rafraîchissent en continu.
+
+### Course du soleil (onglet Course du soleil)
+
+Affiche un **arc horizon-à-horizon de la trajectoire solaire du jour** (échantillonné à partir d'un algorithme de position solaire NOAA), avec :
+
+- les heures de **lever**, **midi solaire** et **coucher** repérées sous l'arc ;
+- la **position actuelle du soleil** affichée en direct sur l'arc, avec une ligne-repère jusqu'à l'horizon ;
+- un récapitulatif de l'**azimut** courant (avec point cardinal), de l'**élévation**, de la **durée du jour** et de la **saison** (inversée dans l'hémisphère sud).
+
+Le jour et la nuit polaires sont détectés et signalés explicitement.
+
+### Lune (onglet Lune)
+
+Affiche un **disque de phase** dessiné à partir de la fraction éclairée actuelle — croissante ou décroissante, du fin croissant à la gibbeuse, et inversé dans l'hémisphère sud — plus :
+
+- le **nom de la phase** (nouvelle lune, premier croissant, premier quartier…) et le **pourcentage éclairé** ;
+- les heures de **lever** et de **coucher** de la Lune (ou une mention « toujours levée / couchée » près des pôles) ;
+- l'**azimut** et l'**élévation** courants.
+
+La position de la Lune, son illumination et ses lever/coucher sont calculés avec les formules standard basse précision de Meeus / SunCalc.
+
+Comme pour les valeurs de confort, les données techniques (azimut, élévation, phase, illumination) disposent d'**infobulles éducatives** révélées en survolant, en donnant le focus clavier ou en appuyant sur la valeur elle-même.
 
 ## Réactivité, performance, accessibilité, confidentialité
 

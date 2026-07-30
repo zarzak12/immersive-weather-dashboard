@@ -1,4 +1,4 @@
-import { LitElement, PropertyValues, css, html, nothing } from 'lit';
+import { LitElement, PropertyValues, css, html, nothing, svg } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import type {
@@ -41,6 +41,7 @@ import {
 } from './data/comfort';
 import { conditionToScene, isDaytime } from './data/weather-condition';
 import { season, solarPosition, sunTimes } from './data/solar';
+import { moonIllumination, moonPosition, moonTimes } from './data/moon';
 import { localize } from './localize/localize';
 import { SceneRenderer, type SceneState } from './rendering/scene-renderer';
 
@@ -101,10 +102,20 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
   private _subscribedDaily = false;
   private _subscribedHourly = false;
   private _subscriptionEpoch = 0;
+  private _tickTimer?: ReturnType<typeof setInterval>;
 
   private readonly _handleReducedMotionChange = () => this._updateSceneState();
   private readonly _handleVisibilityChange = () => {
     this._renderer?.setPaused(document.hidden || !this._visible);
+  };
+  /**
+   * Periodically refreshes the scene and the Lit-rendered tiles so the dawn/dusk
+   * sky and the live sun/moon positions keep advancing between Home Assistant
+   * state updates (celestial motion is continuous, not event-driven).
+   */
+  private readonly _handleTick = () => {
+    this._updateSceneState();
+    this.requestUpdate();
   };
 
   setConfig(config: LovelaceCardConfig): void {
@@ -128,6 +139,7 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     if (this._config.metrics.some((metric) => metric.visible)) rows += 2;
     if (this._config.comfort?.enabled) rows += 4;
     if (this._config.sun?.enabled) rows += 3;
+    if (this._config.moon?.enabled) rows += 3;
     const visibleZones = this._config.environment_zones.filter((zone) => zone.visible).length;
     if (visibleZones > 0) rows += Math.ceil(visibleZones / 2) * 2;
     if (this._config.forecast.show_hourly) rows += 2;
@@ -161,6 +173,7 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     this._reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     this._reducedMotionQuery.addEventListener('change', this._handleReducedMotionChange);
     document.addEventListener('visibilitychange', this._handleVisibilityChange);
+    this._tickTimer = setInterval(this._handleTick, 30000);
     if (this.hasUpdated) {
       void this.updateComplete.then(() => {
         if (!this.isConnected) return;
@@ -182,6 +195,10 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     this._reducedMotionQuery?.removeEventListener('change', this._handleReducedMotionChange);
     this._reducedMotionQuery = undefined;
     document.removeEventListener('visibilitychange', this._handleVisibilityChange);
+    if (this._tickTimer !== undefined) {
+      clearInterval(this._tickTimer);
+      this._tickTimer = undefined;
+    }
     this._subscribedWeatherEntity = undefined;
     this._subscribedDaily = false;
     this._subscribedHourly = false;
@@ -239,15 +256,34 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     const reducedMotion =
       !this._config.animation.enabled || (this._config.animation.respect_reduced_motion && (this._reducedMotionQuery?.matches ?? false));
 
+    const sceneMode = this._config.scene.mode;
+    const isDay = isDaytime(this.hass, sceneMode, condition);
+    const lat = this.hass?.config?.latitude;
+    const lon = this.hass?.config?.longitude;
+    let sunElevation: number;
+    let sunAzimuth = 180;
+    if (typeof lat === 'number' && typeof lon === 'number' && Number.isFinite(lat) && Number.isFinite(lon)) {
+      const sunPos = solarPosition(new Date(), lat, lon);
+      sunElevation = sunPos.elevation;
+      sunAzimuth = sunPos.azimuth;
+    } else {
+      sunElevation = isDay ? 25 : -25;
+    }
+    // Forced day/night modes skip the dawn/dusk transition entirely.
+    if (sceneMode === 'day') sunElevation = 25;
+    else if (sceneMode === 'night') sunElevation = -25;
+
     const state: SceneState = {
       category: conditionToScene(condition),
-      isDay: isDaytime(this.hass, this._config.scene.mode, condition),
+      isDay,
       quality: this._config.animation.quality,
       intensity: this._config.animation.intensity,
       windSpeedKmh,
       windBearingDeg,
       reducedMotion,
-      cloudCoverage
+      cloudCoverage,
+      sunElevation,
+      sunAzimuth
     };
     this._renderer.setState(state);
     this._renderer.setPaused(!this._visible || document.hidden);
@@ -408,6 +444,7 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
           ${this._renderMetrics(resolvedMetrics, language)}
           ${this._config.comfort?.enabled ? this._renderComfort(resolvedMetrics, language) : nothing}
           ${this._config.sun?.enabled ? this._renderSunPath(language) : nothing}
+          ${this._config.moon?.enabled ? this._renderMoonPhase(language) : nothing}
           ${this._renderZones(language)}
           ${weatherEntityId ? this._renderForecast(language) : nothing}
           ${issues.length
@@ -984,9 +1021,12 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
           <circle class="sun-end" cx=${xLeft} cy=${horizonY} r="3"></circle>
           <circle class="sun-end" cx=${xRight} cy=${horizonY} r="3"></circle>
           ${sunUp
-            ? html`<circle cx=${sunX.toFixed(1)} cy=${sunY.toFixed(1)} r="18" fill="url(#iwd-sun-glow)"></circle>
-                <circle class="sun-dot" cx=${sunX.toFixed(1)} cy=${sunY.toFixed(1)} r="6"></circle>`
-            : html`<circle class="moon-dot" cx=${(W / 2).toFixed(1)} cy=${(horizonY - 10).toFixed(1)} r="6"></circle>`}
+            ? svg`
+                <line class="sun-now-line" x1=${sunX.toFixed(1)} y1=${sunY.toFixed(1)} x2=${sunX.toFixed(1)} y2=${horizonY}></line>
+                <circle cx=${sunX.toFixed(1)} cy=${sunY.toFixed(1)} r="18" fill="url(#iwd-sun-glow)"></circle>
+                <circle class="sun-dot" cx=${sunX.toFixed(1)} cy=${sunY.toFixed(1)} r="6.5"></circle>
+              `
+            : svg`<circle class="moon-dot" cx=${(W / 2).toFixed(1)} cy=${(horizonY - 10).toFixed(1)} r="6"></circle>`}
           <text class="sun-tl" x=${xLeft} y=${horizonY + 16} text-anchor="start">${sunriseStr}</text>
           <text class="sun-tl" x=${noonX.toFixed(1)} y=${horizonY + 16} text-anchor="middle">${noonStr}</text>
           <text class="sun-tl" x=${xRight} y=${horizonY + 16} text-anchor="end">${sunsetStr}</text>
@@ -1002,6 +1042,90 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
           ${this._sunStat('mdi:angle-acute', localize(language, 'sun.elevation'), `${Math.round(pos.elevation)}°`, 'sun.elevation', language)}
           ${this._sunStat('mdi:timelapse', localize(language, 'sun.day_length'), dayLengthStr, 'sun.day_length', language)}
           ${this._sunStat('mdi:leaf', localize(language, 'sun.season'), localize(language, `season.${seas}`), undefined, language)}
+        </div>
+      </div>
+    `;
+  }
+
+  private _moonStat(icon: string, label: string, value: string, helpKey: string | undefined, language: string) {
+    return html`
+      <div
+        class="moon-stat${helpKey ? ' has-tip' : ''}"
+        tabindex=${helpKey ? '0' : nothing}
+        aria-describedby=${helpKey ? this._tipId(`moon-${helpKey}`) : nothing}
+      >
+        <ha-icon icon=${icon}></ha-icon>
+        <span class="moon-stat-label">${label}</span>
+        <span class="moon-stat-value">${value}</span>
+        ${helpKey ? this._tooltip(helpKey, `moon-${helpKey}`, language) : nothing}
+      </div>
+    `;
+  }
+
+  /**
+   * Renders the optional moon tile: a phase disc showing the current
+   * illumination (waxing/waning, crescent → gibbous), plus the phase name,
+   * illuminated percentage, moonrise/moonset, azimuth and elevation. Computed
+   * locally from the Home Assistant latitude/longitude — no network calls.
+   */
+  private _renderMoonPhase(language: string) {
+    if (!this.hass) return nothing;
+    const lat = this.hass.config?.latitude;
+    const lon = this.hass.config?.longitude;
+    if (typeof lat !== 'number' || typeof lon !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return html`<div class="panel notice">${localize(language, 'moon.unavailable')}</div>`;
+    }
+
+    const now = new Date();
+    const illum = moonIllumination(now);
+    const pos = moonPosition(now, lat, lon);
+    const times = moonTimes(now, lat, lon);
+
+    // Phase-disc geometry (80×80 viewBox).
+    const cx = 40;
+    const cy = 40;
+    const r = 34;
+    // Northern hemisphere: a waxing moon is lit on the right; flipped south of the equator.
+    const litOnRight = illum.waxing !== lat < 0;
+    const rx = r * Math.abs(1 - 2 * illum.fraction); // terminator ellipse horizontal semi-axis
+    const gibbous = illum.fraction > 0.5;
+    const litHalf = litOnRight
+      ? `M ${cx} ${cy - r} A ${r} ${r} 0 0 1 ${cx} ${cy + r} Z`
+      : `M ${cx} ${cy - r} A ${r} ${r} 0 0 0 ${cx} ${cy + r} Z`;
+
+    const illumPct = Math.round(illum.fraction * 100);
+    const compass = bearingToCompass(pos.azimuth);
+    const moonriseStr = times.moonrise ? formatTime(times.moonrise, language) : '—';
+    const moonsetStr = times.moonset ? formatTime(times.moonset, language) : '—';
+    const phaseLabel = localize(language, `moon_phase.${illum.phaseName}`);
+
+    return html`
+      <div class="panel moon-panel">
+        <div class="panel-title">${localize(language, 'moon.section_title')}</div>
+        <div class="moon-hero">
+          <svg class="moon-disc" viewBox="0 0 80 80" role="img" aria-label=${phaseLabel}>
+            <circle class="moon-dark" cx=${cx} cy=${cy} r=${r}></circle>
+            <path class="moon-lit" d=${litHalf}></path>
+            <ellipse class=${gibbous ? 'moon-lit' : 'moon-dark'} cx=${cx} cy=${cy} rx=${rx.toFixed(1)} ry=${r}></ellipse>
+            <circle class="moon-outline" cx=${cx} cy=${cy} r=${r}></circle>
+          </svg>
+          <div class="moon-hero-text">
+            <div class="moon-phase-name has-tip" tabindex="0" aria-describedby=${this._tipId('moon-phase')}>
+              ${phaseLabel}${this._tooltip('moon.phase', 'moon-phase', language)}
+            </div>
+            <div class="moon-illum has-tip" tabindex="0" aria-describedby=${this._tipId('moon-illum')}>
+              <strong>${illumPct}%</strong> ${localize(language, 'moon.illuminated')}${this._tooltip('moon.illumination', 'moon-illum', language)}
+            </div>
+            ${times.alwaysUp || times.alwaysDown
+              ? html`<div class="moon-note">${localize(language, times.alwaysUp ? 'moon.always_up' : 'moon.always_down')}</div>`
+              : nothing}
+          </div>
+        </div>
+        <div class="moon-stats">
+          ${this._moonStat('mdi:arrow-up', localize(language, 'moon.moonrise'), moonriseStr, undefined, language)}
+          ${this._moonStat('mdi:arrow-down', localize(language, 'moon.moonset'), moonsetStr, undefined, language)}
+          ${this._moonStat('mdi:compass-outline', localize(language, 'moon.azimuth'), `${Math.round(pos.azimuth)}° ${compass}`, 'moon.azimuth', language)}
+          ${this._moonStat('mdi:angle-acute', localize(language, 'moon.elevation'), `${Math.round(pos.elevation)}°`, 'moon.elevation', language)}
         </div>
       </div>
     `;
@@ -1362,7 +1486,8 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
     .has-tip .comfort-insight-text,
     .metric.has-tip .metric-label,
     .zone-row.has-tip .zone-label,
-    .sun-stat.has-tip .sun-stat-label {
+    .sun-stat.has-tip .sun-stat-label,
+    .moon-stat.has-tip .moon-stat-label {
       text-decoration: underline dotted;
       text-underline-offset: 2px;
       text-decoration-color: rgba(255, 255, 255, 0.32);
@@ -1444,6 +1569,12 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       stroke: #fff3d0;
       stroke-width: 1.5;
     }
+    .sun-now-line {
+      stroke: #ffd873;
+      stroke-width: 1;
+      stroke-dasharray: 2 2;
+      opacity: 0.55;
+    }
     .moon-dot {
       fill: #cdd6e6;
     }
@@ -1488,6 +1619,85 @@ export class ImmersiveWeatherDashboardCard extends LitElement {
       min-width: 0;
     }
     .sun-stat-value {
+      margin-left: auto;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .moon-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .moon-panel .panel-title {
+      margin-bottom: 0;
+    }
+    .moon-hero {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .moon-disc {
+      width: 72px;
+      height: 72px;
+      flex-shrink: 0;
+    }
+    .moon-dark {
+      fill: #39425a;
+    }
+    .moon-lit {
+      fill: #e8edf5;
+    }
+    .moon-outline {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.28);
+      stroke-width: 1;
+    }
+    .moon-hero-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .moon-phase-name {
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .moon-illum {
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+    .moon-illum strong {
+      color: var(--accent-color, #7ec8ff);
+    }
+    .moon-note {
+      font-size: 0.78rem;
+      opacity: 0.75;
+    }
+    .moon-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .moon-stat {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.07);
+      font-size: 0.83rem;
+      min-width: 0;
+    }
+    .moon-stat ha-icon {
+      --mdc-icon-size: 18px;
+      color: var(--accent-color, #7ec8ff);
+      flex-shrink: 0;
+    }
+    .moon-stat-label {
+      opacity: 0.85;
+      min-width: 0;
+    }
+    .moon-stat-value {
       margin-left: auto;
       font-weight: 600;
       white-space: nowrap;
